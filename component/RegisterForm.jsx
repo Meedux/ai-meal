@@ -4,17 +4,29 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import UnderlineInput from "./util/UnderlineInput";
 import PasswordInput from "./util/PasswordInput";
+import ErrorToast from "./ErrorToast";
 
 const RegisterForm = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     // Add logic to create a new user using the provided email, password, and name
     // For example, you can use fetch or axios to send a POST request to your backend API
-    console.log("Registering user:", { email, password, name });
+    try {
+      // Simulate registration logic
+      if (!email || !password || !name) {
+        throw new Error("All fields are required.");
+      }
+      // Reset error if registration is successful
+      setError("");
+      console.log("Registering user:", { email, password, name });
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
@@ -43,6 +55,7 @@ const RegisterForm = () => {
             >
               Please enter your details to create an account.
             </motion.p>
+            {error && <ErrorToast message={error} />}
             <form className="mt-4 w-full" onSubmit={handleSubmit}>
               <UnderlineInput
                 type="text"

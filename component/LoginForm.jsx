@@ -2,10 +2,29 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import UnderlineInput from "./util/UnderlineInput";
+import ErrorToast from "./ErrorToast";
 
 const LoginForm = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    // Add logic to handle login
+    // For example, you can use fetch or axios to send a POST request to your backend API
+    try {
+      // Simulate login logic
+      if (!email || !password) {
+        throw new Error("Email and password are required.");
+      }
+      // Reset error if login is successful
+      setError("");
+      console.log("Logging in user:", { email, password });
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-neutral-800">
@@ -33,7 +52,8 @@ const LoginForm = () => {
             >
               Please enter your credentials to login.
             </motion.p>
-            <form className="mt-4 w-full bg-neutral-900">
+            {error && <ErrorToast message={error} />}
+            <form className="mt-4 w-full bg-neutral-900" onSubmit={handleSubmit}>
               <UnderlineInput
                 type="email"
                 placeholder="Enter email"
