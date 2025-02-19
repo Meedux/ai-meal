@@ -1,0 +1,78 @@
+User profile with dietary preferences, allergies, and health goals
+Step-by-step cooking instructions with estimated preparation time
+AI-powered portion control recommendations
+AI-powered meal recommendations based on past meals & feedback
+AI detects missing ingredients and suggests alternatives
+Smart ingredient recommendations based on cost & availability
+Secure cloud storage for meal plans, grocery lists, and preferences
+Real-time updates and collaboration (family members can share meal plans)
+AI calculates calories, macronutrients, vitamins & minerals
+Smart meal adjustments for weight loss, muscle gain, diabetes, etc.
+AI Chatbot for Meal Suggestions
+AI curates trending recipes (seasonal & regional)
+
+
+Tech Stack:
+NextJS
+Tailwind
+
+
+Todo:
+
+Finished the Frontend First:
+    Navbar:
+        Authenticated State *
+        Unauthenticated State *
+    
+    Login:
+        Login Form *
+        Error Handling *
+        Animated and Interactive *
+
+    Register:
+        Register Form *
+        Error Handling *
+        Animated and Interactive *
+
+    Trending Home Page:
+        Header Section *
+        Trending User Made Meals *
+        Trending Categories *
+
+    Meals Page:
+        Meals Search bar *
+        Meals Table Results *
+
+        Meals Details Page:
+            Meals Header *
+            Recipe Instructions * 
+            Ingredients List *
+            Similar Meals *
+
+    Profile Page:
+        Submitted Custom Made Meals *
+        Profile Details *
+        Edit Profile Button:
+            Redirect to Profile Options within the Options Page
+
+    Options:
+        ???? I HAVE NO CLUE HOW TO FUCKING TACKLE THIS
+
+    Meal Insight:
+        Ingredients Card *
+        Pie Chart in a Card *
+        Macro Impact *
+    
+    Chatbot Page:
+        ??? ONCE AGAIN I HAVE NO FUCKING CLUE HOW TO TACKLE THIS?!
+    
+
+    
+
+    
+
+Implement the Backend:
+
+Finalize the Functionalities:
+
+Implement the AI part:
