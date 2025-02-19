@@ -172,7 +172,7 @@ const Navbar = () => {
                     <li>
                       <a
                         className="flex items-center gap-x-3 py-2 px-2.5 text-sm rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-neutral-300"
-                        href="#"
+                        href="/"
                       >
                         <svg
                           className="size-4"
@@ -195,7 +195,7 @@ const Navbar = () => {
                     <li>
                       <a
                         className="flex items-center gap-x-3 py-2 px-2.5 text-sm rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-neutral-300"
-                        href="#"
+                        href="/register"
                       >
                         <svg
                           className="size-4"
