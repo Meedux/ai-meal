@@ -1,8 +1,14 @@
 import React from "react";
+import { motion } from "framer-motion";
 
 const PasswordInput = ({ value, onChange }) => {
   return (
-    <div className="relative mb-3">
+    <motion.div
+      className="relative mb-3"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
       <input
         type="password"
         className="peer py-3 pe-0 ps-8 block w-full bg-neutral-900 border-t-transparent border-b-2 border-x-transparent text-sm focus:border-t-transparent focus:border-x-transparent focus:ring-0 disabled:opacity-50 disabled:pointer-events-none border-b-neutral-700 text-neutral-400 placeholder-neutral-500 focus:ring-neutral-600 focus:border-b-neutral-600"
@@ -27,7 +33,7 @@ const PasswordInput = ({ value, onChange }) => {
           <circle cx="12" cy="7" r="4"></circle>
         </svg>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
