@@ -26,20 +26,20 @@ Finished the Frontend First:
     
     Login:
         Login Form /
-        Error Handling *
-        Animated and Interactive *
+        Error Handling /
+        Animated and Interactive /
 
     Register:
         Register Form /
-        Error Handling *
-        Animated and Interactive *
+        Error Handling /
+        Animated and Interactive /
 
-    Trending Home Page:
+    Trending Home Page: **
         Header Section *
         Trending User Made Meals *
         Trending Categories *
 
-    Meals Page:
+    Meals Page: **
         Meals Search bar *
         Meals Table Results *
 
@@ -58,7 +58,7 @@ Finished the Frontend First:
     Options:
         ???? I HAVE NO CLUE HOW TO FUCKING TACKLE THIS
 
-    Meal Insight:
+    Meal Insight: **
         Ingredients Card *
         Pie Chart in a Card *
         Macro Impact *
