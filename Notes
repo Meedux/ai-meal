@@ -34,10 +34,11 @@ Finished the Frontend First:
         Error Handling /
         Animated and Interactive /
 
-    Trending Home Page: **
-        Header Section *
-        Trending User Made Meals *
-        Trending Categories *
+    Trending Home Page: /
+        Header Section / NOTE: REFACTOR THE DESIGN
+        Trending User Made Meals /
+        Trending Categories /
+
 
     Meals Page: **
         Meals Search bar *
@@ -49,6 +50,11 @@ Finished the Frontend First:
             Ingredients List *
             Similar Meals *
 
+        Meal Insight: 
+            Ingredients Card *
+            Pie Chart in a Card *
+            Macro Impact *
+
     Profile Page:
         Submitted Custom Made Meals *
         Profile Details *
@@ -57,11 +63,6 @@ Finished the Frontend First:
 
     Options:
         ???? I HAVE NO CLUE HOW TO FUCKING TACKLE THIS
-
-    Meal Insight: **
-        Ingredients Card *
-        Pie Chart in a Card *
-        Macro Impact *
     
     Chatbot Page:
         ??? ONCE AGAIN I HAVE NO FUCKING CLUE HOW TO TACKLE THIS?!

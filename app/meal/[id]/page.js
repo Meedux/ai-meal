@@ -1,9 +1,16 @@
-import React from 'react'
+"use client";
 
-const page = () => {
+import React from 'react';
+import { useParams } from 'next/navigation';
+
+const MealPage = () => {
+  const { id } = useParams();
+
   return (
-    <div>page</div>
-  )
-}
+    <>
+    
+    </>
+  );
+};
 
-export default page
+export default MealPage;

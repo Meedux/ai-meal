@@ -7,13 +7,8 @@ const config = {
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     './node_modules/preline/preline.js',
   ],
-  theme: {
-    
-  },
-  plugins: [
-    require('preline/plugin'),
-  ],
   darkMode: 'class',
+  plugins: [require("daisyui")]
 };
 
 export default config;

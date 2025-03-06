@@ -1,8 +1,8 @@
 "use client";
 
-import React from 'react';
-import { CircularProgressbar, buildStyles } from 'react-circular-progressbar';
-import 'react-circular-progressbar/dist/styles.css';
+import React from "react";
+import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
+import "react-circular-progressbar/dist/styles.css";
 
 const Welcome = () => {
   const today = new Date()?.toLocaleDateString();
@@ -19,15 +19,14 @@ const Welcome = () => {
       <p className="mb-4">Today's Date: {today}</p>
       <div className="flex items-center justify-evenly space-x-4">
         <div className="w-1/4">
-          <CircularProgressbar
-            value={caloriePercentage}
-            text={`${Math.round(caloriePercentage)}%`}
-            styles={buildStyles({
-              textColor: '#fff',
-              pathColor: '#4caf50',
-              trailColor: '#d6d6d6',
-            })}
-          />
+          <div
+            className="radial-progress text-white"
+            style={{ "--value": 70 } /* as React.CSSProperties */}
+            aria-valuenow={70}
+            role="progressbar"
+          >
+            70%
+          </div>
           <p className="text-center mt-2 text-sm">Remaining Calorie Intake</p>
         </div>
         <div className="w-1/4">
@@ -39,7 +38,9 @@ const Welcome = () => {
                 style={{ width: `${proteinPercentage}%` }}
               ></div>
             </div>
-            <p className="text-right mt-1 text-sm">{proteinIntake}g / {proteinGoal}g</p>
+            <p className="text-right mt-1 text-sm">
+              {proteinIntake}g / {proteinGoal}g
+            </p>
           </div>
         </div>
       </div>
