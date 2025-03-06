@@ -1,7 +1,6 @@
 import "./globals.css";
 import { Geist, Geist_Mono } from "next/font/google";
 import Navbar from "@/component/Navbar";
-import PrelineScript from "@/component/PreLineScript";
 
 export const metadata = {
   title: "Create Next App",
@@ -15,7 +14,6 @@ export default function RootLayout({ children }) {
         <Navbar />
         {children}
       </body>
-      <PrelineScript />
     </html>
   );
 }

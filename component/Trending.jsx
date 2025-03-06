@@ -1,12 +1,12 @@
 import React from 'react';
 import Card from './util/Card';
-import Table from './Table';
 import CategoryTable from './CategoryTable';
 import Welcome from './Welcome';
+import MealTable from './MealTable';
 
 const Trending = () => {
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 h-[100vh]">
       <div className="mb-4">
         <Card>
           <h2 className="text-xl font-bold">Welcome</h2>
@@ -19,7 +19,7 @@ const Trending = () => {
           <Card>
             <h2 className="text-xl font-bold mb-6">Trending User Made Meals</h2>
             {/* TODO: Implement a Dummy table here with Dummy Data */}
-            <Table />
+            <MealTable />
           </Card>
         </div>
         <div className="w-[40%]">

@@ -1,8 +1,6 @@
 "use client";
 
 import React from "react";
-import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
-import "react-circular-progressbar/dist/styles.css";
 
 const Welcome = () => {
   const today = new Date()?.toLocaleDateString();
@@ -15,33 +13,26 @@ const Welcome = () => {
   const proteinPercentage = (proteinIntake / proteinGoal) * 100;
 
   return (
-    <div className="p-4 bg-neutral-900 text-neutral-400 rounded-lg shadow-md">
-      <p className="mb-4">Today's Date: {today}</p>
-      <div className="flex items-center justify-evenly space-x-4">
-        <div className="w-1/4">
-          <div
-            className="radial-progress text-white"
-            style={{ "--value": 70 } /* as React.CSSProperties */}
-            aria-valuenow={70}
-            role="progressbar"
-          >
-            70%
+    <div className="p-6 bg-neutral-900 text-neutral-400 rounded-lg shadow-md">
+      <p className="mb-6 text-lg font-semibold text-center text-white">Today's Date: {today}</p>
+      <div className="flex flex-col md:flex-row items-center justify-evenly space-y-6 md:space-y-0 md:space-x-6">
+        <div className="w-1/2 md:w-1/4">
+          <div className="radial-progress text-primary" style={{ "--value": caloriePercentage }}>
+            {Math.round(caloriePercentage)}%
           </div>
-          <p className="text-center mt-2 text-sm">Remaining Calorie Intake</p>
+          <p className="text-center mt-4 text-sm text-white">Remaining Calorie Intake</p>
         </div>
-        <div className="w-1/4">
-          <div className="mb-2">
-            <p className="text-sm">Remaining Protein Intake</p>
-            <div className="w-full bg-neutral-700 rounded-full h-3">
-              <div
-                className="bg-blue-600 h-3 rounded-full"
-                style={{ width: `${proteinPercentage}%` }}
-              ></div>
-            </div>
-            <p className="text-right mt-1 text-sm">
-              {proteinIntake}g / {proteinGoal}g
-            </p>
+        <div className="w-1/2 md:w-1/4">
+          <p className="text-center mb-2 text-sm text-white">Remaining Protein Intake</p>
+          <div className="w-full bg-neutral-700 rounded-full h-3">
+            <div
+              className="bg-blue-600 h-3 rounded-full"
+              style={{ width: `${proteinPercentage}%` }}
+            ></div>
           </div>
+          <p className="text-center mt-2 text-sm text-white">
+            {proteinIntake}g / {proteinGoal}g
+          </p>
         </div>
       </div>
     </div>
