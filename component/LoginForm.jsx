@@ -1,7 +1,6 @@
 "use client";
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import UnderlineInput from "./util/UnderlineInput";
 import ErrorToast from "./ErrorToast";
 
 const LoginForm = () => {
@@ -34,18 +33,20 @@ const LoginForm = () => {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <div className="min-h-60 flex flex-col border shadow-sm rounded-xl bg-neutral-900 border-neutral-700 shadow-neutral-700/70">
-          <div className="flex flex-auto flex-col justify-center items-center p-4 md:p-5">
-            <motion.h3
-              className="text-lg font-bold text-white"
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              Login
-            </motion.h3>
+        <div className="card w-full card-border bg-neutral-900 shadow-xl">
+          <div className="card-body">
+            <center>
+              <motion.h3
+                className="card-title text-white"
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                Login
+              </motion.h3>
+            </center>
             <motion.p
-              className="mt-2 text-neutral-400"
+              className="text-neutral-400"
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
@@ -53,22 +54,34 @@ const LoginForm = () => {
               Please enter your credentials to login.
             </motion.p>
             {error && <ErrorToast message={error} />}
-            <form className="mt-4 w-full bg-neutral-900" onSubmit={handleSubmit}>
-              <UnderlineInput
-                type="email"
-                placeholder="Enter email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <UnderlineInput
-                type="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+            <form className="form-control" onSubmit={handleSubmit}>
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text text-neutral-400">Email</span>
+                </label>
+                <input
+                  type="email"
+                  placeholder="Enter email"
+                  className="input input-bordered w-full bg-neutral-800 text-white"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div className="form-control mt-4">
+                <label className="label">
+                  <span className="label-text text-neutral-400">Password</span>
+                </label>
+                <input
+                  type="password"
+                  placeholder="Enter password"
+                  className="input input-bordered w-full bg-neutral-800 text-white"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
               <motion.button
                 type="submit"
-                className="mt-4 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:bg-blue-700"
+                className="btn btn-primary mt-4 w-full"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
               >
