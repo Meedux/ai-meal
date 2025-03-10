@@ -35,25 +35,25 @@ Finished the Frontend First:
         Animated and Interactive /
 
     Trending Home Page: /
-        Header Section / NOTE: REFACTOR THE DESIGN
+        Header Section / 
         Trending User Made Meals /
         Trending Categories /
 
 
     Meals Page: **
-        Meals Search bar *
-        Meals Table Results *
+        Meals Search bar /
+        Meals Table Results /
 
         Meals Details Page:
-            Meals Header *
-            Recipe Instructions * 
-            Ingredients List *
-            Similar Meals *
+            Meals Header /
+            Recipe Instructions // 
+            Ingredients List /
+            Similar Meals /
 
-        Meal Insight: 
-            Ingredients Card *
-            Pie Chart in a Card *
-            Macro Impact *
+            Meal Insight: 
+                Ingredients Card /
+                Pie Chart in a Card /
+                Macro Impact //
 
     Profile Page:
         Submitted Custom Made Meals *
