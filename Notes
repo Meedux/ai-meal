@@ -121,7 +121,7 @@ AI Tooling Integration
 
 Implementation Strategy
 
-    Start with Authentication
+    Start with Authentication /
         Enable authentication in Firebase console
         Implement authentication flow before AI features
 
