@@ -5,27 +5,43 @@ import { motion } from "framer-motion";
 import UnderlineInput from "./util/UnderlineInput";
 import PasswordInput from "./util/PasswordInput";
 import ErrorToast from "./ErrorToast";
+import { registerUser } from "@/lib/service/authService";
+import { useRouter } from "next/navigation";
 
 const RegisterForm = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Add logic to create a new user using the provided email, password, and name
-    // For example, you can use fetch or axios to send a POST request to your backend API
+    setIsLoading(true);
+    
     try {
-      // Simulate registration logic
       if (!email || !password || !name) {
         throw new Error("All fields are required.");
       }
-      // Reset error if registration is successful
+      
+      await registerUser(email, password, name);
       setError("");
-      console.log("Registering user:", { email, password, name });
+      
+      router.push("/trending");
     } catch (err) {
-      setError(err.message);
+      // Handle specific Firebase auth errors
+      if (err.code === 'auth/email-already-in-use') {
+        setError("This email is already registered.");
+      } else if (err.code === 'auth/invalid-email') {
+        setError("Please provide a valid email address.");
+      } else if (err.code === 'auth/weak-password') {
+        setError("Password should be at least 6 characters.");
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -62,26 +78,38 @@ const RegisterForm = () => {
                 placeholder="Enter name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                disabled={isLoading}
               />
               <UnderlineInput
                 type="email"
                 placeholder="Enter email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
               />
               <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
               />
               <motion.button
                 type="submit"
                 className="mt-4 w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:bg-blue-700"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                disabled={isLoading}
               >
-                Register
+                {isLoading ? "Registering..." : "Register"}
               </motion.button>
             </form>
+            <div className="mt-4 text-center">
+              <p className="text-neutral-400">
+                Already have an account?{" "}
+                <a href="/" className="text-blue-500 hover:underline">
+                  Login here
+                </a>
+              </p>
+            </div>
           </div>
         </div>
       </motion.div>

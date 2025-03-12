@@ -2,26 +2,39 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import ErrorToast from "./ErrorToast";
+import { loginUser } from "@/lib/service/authService";
+import { useRouter } from "next/navigation";
 
 const LoginForm = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Add logic to handle login
-    // For example, you can use fetch or axios to send a POST request to your backend API
+    setIsLoading(true);
+    
     try {
-      // Simulate login logic
       if (!email || !password) {
         throw new Error("Email and password are required.");
       }
-      // Reset error if login is successful
+      
+      await loginUser(email, password);
       setError("");
-      console.log("Logging in user:", { email, password });
+      router.push("/trending");
     } catch (err) {
-      setError(err.message);
+      // Handle specific Firebase auth errors
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        setError("Invalid email or password.");
+      } else if (err.code === 'auth/too-many-requests') {
+        setError("Too many failed login attempts. Please try again later.");
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -65,6 +78,7 @@ const LoginForm = () => {
                   className="input input-bordered w-full bg-neutral-800 text-white"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
                 />
               </div>
               <div className="form-control mt-4">
@@ -77,6 +91,7 @@ const LoginForm = () => {
                   className="input input-bordered w-full bg-neutral-800 text-white"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
                 />
               </div>
               <motion.button
@@ -84,10 +99,19 @@ const LoginForm = () => {
                 className="btn btn-primary mt-4 w-full"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                disabled={isLoading}
               >
-                Login
+                {isLoading ? "Logging in..." : "Login"}
               </motion.button>
             </form>
+            <div className="mt-4 text-center">
+              <p className="text-neutral-400">
+                Don't have an account?{" "}
+                <a href="/register" className="text-blue-500 hover:underline">
+                  Register here
+                </a>
+              </p>
+            </div>
           </div>
         </div>
       </motion.div>
