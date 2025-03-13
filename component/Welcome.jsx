@@ -5,8 +5,13 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
 const Welcome = ({ user }) => {
-  const today = new Date().toLocaleDateString();
+  const today = new Date().toLocaleDateString('en-US', { 
+    weekday: 'long', 
+    month: 'long', 
+    day: 'numeric' 
+  });
   const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState(null);
   const [macros, setMacros] = useState({
     calories: { current: 0, goal: 2000, color: "from-green-500 to-emerald-400" },
     protein: { current: 0, goal: 150, color: "from-blue-500 to-cyan-400" },
@@ -15,7 +20,7 @@ const Welcome = ({ user }) => {
   });
   
   useEffect(() => {
-    const fetchUserMacros = async () => {
+    const fetchUserData = async () => {
       if (!user) {
         setLoading(false);
         return;
@@ -25,10 +30,11 @@ const Welcome = ({ user }) => {
         // Get user document for target macros
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
-          const userData = userDoc.data();
+          const data = userDoc.data();
+          setUserData(data);
           
           // Get target macros from user document
-          const targetMacros = userData.target_macros || {
+          const targetMacros = data.target_macros || {
             calories: 2000,
             protein: 150,
             carbs: 200,
@@ -64,13 +70,13 @@ const Welcome = ({ user }) => {
           });
         }
       } catch (error) {
-        console.error("Error fetching user macros:", error);
+        console.error("Error fetching user data:", error);
       } finally {
         setLoading(false);
       }
     };
     
-    fetchUserMacros();
+    fetchUserData();
   }, [user]);
 
   // Calculate percentages safely
@@ -81,86 +87,110 @@ const Welcome = ({ user }) => {
   
   if (loading && user) {
     return (
-      <div className="flex justify-center items-center p-6">
-        <div className="w-8 h-8 border-t-2 border-primary border-solid rounded-full animate-spin"></div>
+      <div className="flex items-center justify-center p-6">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-primary"></div>
       </div>
     );
   }
-  
+
   return (
-    <div className="p-6 bg-gradient-to-br from-neutral-900 to-neutral-800 text-neutral-300 rounded-xl shadow-lg">
+    <div className="w-full">
       <div className="flex flex-col md:flex-row items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-white tracking-tight mb-2 md:mb-0">
-          {user ? 'Your Nutrition Dashboard' : 'Welcome to AI Meal Planner'}
-        </h2>
-        <p className="text-neutral-400 font-medium">{today}</p>
+        <div>
+          <h1 className="text-2xl font-bold text-white">
+            {user ? `Welcome back, ${userData?.name || 'User'}` : 'Welcome to AI Meal Planner'}
+          </h1>
+          <p className="text-neutral-400 mt-1">{today}</p>
+        </div>
+        
+        {user && (
+          <div className="mt-4 md:mt-0 bg-neutral-800/50 px-4 py-2 rounded-lg flex items-center gap-2">
+            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <span className="text-white">Daily Nutrition Tracker</span>
+          </div>
+        )}
       </div>
       
       {user ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="bg-neutral-800/50 rounded-lg p-5 shadow-inner">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-white">Calories</h3>
-                <p className="text-sm font-medium">
-                  <span className="text-primary-400">{macros.calories.current}</span>
-                  <span className="text-neutral-500"> / {macros.calories.goal || '0'}</span>
-                </p>
-              </div>
-              
-              <div className="flex justify-center py-4">
-                <div className="relative">
-                  <div className="radial-progress text-primary bg-neutral-800" 
-                       style={{ "--value": calculatePercentage(macros.calories.current, macros.calories.goal), "--size": "8rem", "--thickness": "0.75rem" }}>
-                    <span className="text-2xl font-bold text-white">{calculatePercentage(macros.calories.current, macros.calories.goal)}%</span>
-                  </div>
-                  <div className="absolute -top-2 -right-2 bg-neutral-800 rounded-full p-1 border border-neutral-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-              
-              <p className="text-center text-sm text-neutral-400">Daily Goal Progress</p>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          {/* Calories card - takes 2 columns */}
+          <div className="lg:col-span-2 bg-neutral-800/40 rounded-lg p-4">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-semibold text-white">Calories</h3>
+              <p className="text-sm font-medium">
+                <span className="text-primary">{macros.calories.current}</span>
+                <span className="text-neutral-500"> / {macros.calories.goal || '0'}</span>
+              </p>
             </div>
             
-            <div className="bg-neutral-800/50 rounded-lg p-5 shadow-inner">
-              <h3 className="font-semibold text-white mb-4">Macronutrients</h3>
-              
-              {Object.entries(macros).filter(([key]) => key !== 'calories').map(([key, macro]) => (
-                <div key={key} className="mb-3 last:mb-0">
-                  <div className="flex justify-between mb-1">
-                    <span className="capitalize text-sm font-medium text-white">{key}</span>
-                    <span className="text-xs font-medium text-neutral-400">{macro.current}g / {macro.goal || '0'}g</span>
-                  </div>
-                  <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full bg-gradient-to-r ${macro.color}`}
-                      style={{ width: `${calculatePercentage(macro.current, macro.goal)}%` }}
-                    />
-                  </div>
+            <div className="flex justify-center py-4">
+              <div className="relative h-36 w-36 flex items-center justify-center">
+                <svg className="h-full w-full" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="16" fill="none" stroke="#2A2A2A" strokeWidth="2"></circle>
+                  <circle 
+                    cx="18" cy="18" r="16" fill="none" 
+                    stroke="url(#caloriesGradient)" 
+                    strokeWidth="3" 
+                    strokeDasharray={`${calculatePercentage(macros.calories.current, macros.calories.goal)} 100`}
+                    strokeLinecap="round" 
+                    transform="rotate(-90 18 18)"
+                  ></circle>
+                  <defs>
+                    <linearGradient id="caloriesGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#10B981" />
+                      <stop offset="100%" stopColor="#34D399" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div className="absolute flex flex-col items-center justify-center">
+                  <span className="text-2xl font-bold text-white">{calculatePercentage(macros.calories.current, macros.calories.goal)}%</span>
+                  <span className="text-xs text-neutral-400">of goal</span>
                 </div>
-              ))}
+              </div>
             </div>
           </div>
           
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {Object.entries(macros).map(([key, macro]) => (
-              <div key={key} className="bg-neutral-800/30 p-3 rounded-lg text-center">
-                <p className="text-xs font-medium text-neutral-500 uppercase tracking-wide mb-1">{key}</p>
-                <p className="font-semibold text-white">{macro.current} <span className="text-xs text-neutral-500">{key === 'calories' ? 'kcal' : 'g'}</span></p>
-                <p className="text-xs text-neutral-500 mt-1">
-                  {calculatePercentage(macro.current, macro.goal)}% of goal
-                </p>
+          {/* Macros grid - takes 3 columns */}
+          <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(macros).filter(([key]) => key !== 'calories').map(([key, macro]) => (
+              <div key={key} className="bg-neutral-800/40 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <h4 className="capitalize font-medium text-white">{key}</h4>
+                  <span className="text-xs px-2 py-1 rounded-full bg-neutral-700/50 text-neutral-300">
+                    {macro.current}g / {macro.goal}g
+                  </span>
+                </div>
+                
+                <div className="mt-4 w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full bg-gradient-to-r ${macro.color}`}
+                    style={{ width: `${calculatePercentage(macro.current, macro.goal)}%` }}
+                  />
+                </div>
+                
+                <div className="mt-2 text-xs text-neutral-400 text-right">
+                  {calculatePercentage(macro.current, macro.goal)}% completed
+                </div>
               </div>
             ))}
           </div>
-        </>
+        </div>
       ) : (
-        <div className="text-center py-8">
-          <p className="text-lg text-white mb-4">Sign in to track your daily nutrition goals</p>
-          <p className="text-neutral-400">Create personalized meal plans based on your preferences and dietary needs.</p>
+        <div className="bg-neutral-800/40 rounded-lg p-6 text-center">
+          <div className="mb-4 flex justify-center">
+            <svg className="w-16 h-16 text-primary opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" 
+                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Track Your Nutrition</h2>
+          <p className="text-neutral-400 mb-4">Sign in to track your daily nutrition goals and get personalized meal recommendations.</p>
+          <div className="flex justify-center gap-4">
+            <a href="/" className="btn btn-outline btn-primary">Sign In</a>
+            <a href="/register" className="btn btn-primary">Register</a>
+          </div>
         </div>
       )}
     </div>

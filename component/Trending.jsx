@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import Card from './util/Card';
-import CategoryTable from './CategoryTable';
 import Welcome from './Welcome';
 import MealTable from './MealTable';
 import ModalController from './modal/ModalController';
@@ -23,30 +22,36 @@ const Trending = () => {
     return () => unsubscribe();
   }, []);
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-neutral-800">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Modal controller to handle preference and macro setting */}
       {user && <ModalController user={user} />}
       
-      <div className="container mx-auto p-4 h-[100vh]">
-        <div className="mb-4">
-          <Card>
-            <h2 className="text-xl font-bold">Welcome</h2>
-            {/* Pass user to Welcome component if you need personalization */}
-            <Welcome user={user} />
-          </Card>
-        </div>
-        <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 w-full">
-          <div className="w-full md:w-[60%]">
+      <div className="container mx-auto p-4 min-h-screen">
+        <div className="grid grid-cols-1 gap-6">
+          {/* Welcome section */}
+          <div className="col-span-1">
             <Card>
-              <h2 className="text-xl font-bold mb-6">Trending User Made Meals</h2>
-              <MealTable />
+              <Welcome user={user} />
             </Card>
           </div>
-          <div className="w-full md:w-[40%]">
+          
+          {/* Trending Meals section - now takes full width */}
+          <div className="col-span-1">
             <Card>
-              <h2 className="text-xl font-bold mb-6">Trending Categories</h2>
-              <CategoryTable />
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-white">Trending Meals</h2>
+                <p className="text-neutral-400 mt-1">Explore popular recipes created by our community</p>
+              </div>
+              <MealTable />
             </Card>
           </div>
         </div>
