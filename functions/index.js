@@ -19,51 +19,450 @@ const openai = new OpenAI({
 });
 
 /**
- * Generate meal recommendations based on user preferences
+ * Generate TRULY UNIQUE meal recommendations based on user preferences
+ * Each call will generate completely different recommendations
+ */
+/**
+ * Generate TRULY UNIQUE meal recommendations based on user preferences
+ * Each call will generate completely different recommendations
  */
 exports.generateMealRecommendations = onCall({
   maxInstances: 10,
 }, async (request) => {
   try {
-    const {preferences = {}, count = 3} = request.data;
-    const {uid} = request.auth;
-
-    if (!uid) {
-      throw new HttpsError("unauthenticated", "User must be authenticated");
+    const { 
+      preferences, 
+      count = 4, 
+      userId, 
+      forceNew = true, 
+      timestamp = Date.now(),
+      sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+    } = request.data;
+    
+    if (!userId) {
+      throw new HttpsError("invalid-argument", "User ID is required for generating personalized recommendations");
     }
+    
+    // Generate a truly unique request ID for this specific request
+    const requestId = `${userId}-${timestamp}-${Math.random().toString(36).substring(2, 15)}`;
+    
+    // Clean up previous recommendations for this user
+    try {
+      const oldRecsQuery = await db.collection("recommendations")
+        .where("userId", "==", userId)
+        .where("sessionId", "!=", sessionId)
+        .get();
+      
+      // Delete old recommendations in batches
+      const batch = db.batch();
+      let deleteCount = 0;
+      
+      oldRecsQuery.docs.forEach(doc => {
+        batch.delete(doc.ref);
+        deleteCount++;
+      });
+      
+      if (deleteCount > 0) {
+        await batch.commit();
+        logger.info(`Cleaned up ${deleteCount} old recommendation documents for user ${userId}`);
+      }
+    } catch (cleanupError) {
+      logger.warn("Error cleaning up old recommendations:", cleanupError);
+      // Continue with generation even if cleanup fails
+    }
+    
+    // Sanitize preferences to avoid undefined values which cause Firestore errors
+    const sanitizedPreferences = {};
+    
+    if (preferences) {
+      // Process each preference, converting undefined values to null
+      Object.keys(preferences).forEach(key => {
+        const value = preferences[key];
+        if (value !== undefined) {
+          sanitizedPreferences[key] = value;
+        } else {
+          sanitizedPreferences[key] = null;
+        }
+      });
+    }
+    
+    // Prepare enhanced preferences with safer defaults
+    const enhancedPreferences = {
+      ...sanitizedPreferences,
+      previouslyRecommended: [],
+    };
+    
+    // Retrieve user's previously recommended meals to avoid repetition
+    try {
+      const prevRecsQuery = await db.collection("previousRecommendations")
+        .where("userId", "==", userId)
+        .orderBy("createdAt", "desc")
+        .limit(50)
+        .get();
+      
+      const previousRecommendations = new Set();
+      prevRecsQuery.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.mealNames && Array.isArray(data.mealNames)) {
+          data.mealNames.forEach(name => previousRecommendations.add(name.toLowerCase()));
+        }
+      });
+      
+      enhancedPreferences.previouslyRecommended = Array.from(previousRecommendations);
+      logger.info(`Found ${previousRecommendations.size} previous recommendations to avoid duplicating`);
+    } catch (prevError) {
+      logger.warn("Error retrieving previous recommendations:", prevError);
+      // Continue with generation even if retrieval fails
+    }
+    
+    // Build a much stronger prompt demanding uniqueness
+    const prompt = buildEnhancedMealPrompt(enhancedPreferences, count, requestId);
+    
+    // Safer OpenAI configuration
+    try {
+      // Call OpenAI with very strong instructions for unique content
+      const completion = await openai.chat.completions.create({
+        model: "deepseek-chat", // Use DeepSeek's available model
+        messages: [
+          {
+            role: "system",
+            content: `You are an AI chef specializing in NEVER REPEATING meal recommendations. 
+            For request ID: ${requestId}, generate ${count} COMPLETELY UNIQUE meals 
+            that this user has NEVER seen before.
+            
+            IMPORTANT RULES:
+            1. NEVER suggest any meal that appears in the previouslyRecommended list
+            2. Make each recommendation HIGHLY DISTINCTIVE from others
+            3. Use diverse cooking techniques, ingredients, and cuisine styles
+            4. Vary preparation methods, flavor profiles, and textures
+            5. Each meal should have a UNIQUE NAME - not generic names
+            6. Include specific details that make each meal special
+            7. Create meals with different protein sources, cooking methods, and flavor profiles
+            
+            The user has specifically complained about repetitive recommendations, so your job
+            depends on providing truly novel ideas that they haven't seen before!`
+          },
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 1.2, // Slightly lower temperature for more reliable responses
+        max_tokens: 2500, // Ensure enough tokens for full response
+        frequency_penalty: 0.9, // Slightly reduced but still effective
+        presence_penalty: 0.9 // Slightly reduced but still effective
+      });
 
-    // Build prompt based on preferences
-    const prompt = buildMealPrompt(preferences, count);
+      // Parse the response with error handling
+      const responseText = completion.choices[0].message.content;
+      let recommendations;
+      
+      try {
+        recommendations = JSON.parse(responseText);
+      } catch (jsonError) {
+        logger.error("Failed to parse AI response as JSON:", responseText);
+        throw new HttpsError("internal", "Invalid AI response format - not valid JSON");
+      }
+      
+      if (!recommendations.meals || !Array.isArray(recommendations.meals)) {
+        logger.error("AI response doesn't contain a meals array:", recommendations);
+        throw new HttpsError("internal", "Invalid AI response format - missing meals array");
+      }
+      
+      // Add unique IDs, user ID, and timestamps to each meal
+      const mealsWithMetadata = recommendations.meals.map((meal, i) => ({
+        ...meal,
+        id: `ai-rec-${userId}-${timestamp}-${i}-${Math.random().toString(36).substring(2, 9)}`,
+        userId: userId,
+        generatedAt: timestamp,
+        sessionId: sessionId,
+        uniqueness: "enforced", // Flag to indicate these are from the improved algorithm
+        // Add category from sanitized preferences if available
+        category: sanitizedPreferences.category || meal.category || "General"
+      }));
+      
+      // Store the recommended meal names for future reference
+      try {
+        await db.collection("previousRecommendations").add({
+          userId,
+          mealNames: mealsWithMetadata.map(meal => meal.name),
+          createdAt: new Date(),
+          sessionId
+        });
+      } catch (storeError) {
+        logger.warn("Error storing previous recommendation names:", storeError);
+        // Continue even if storage fails
+      }
+      
+      // Store the full recommendations in the recommendations collection
+      try {
+        await db.collection("recommendations").add({
+          userId,
+          sessionId,
+          meals: mealsWithMetadata,
+          generatedAt: new Date(),
+          requestId,
+          preferences: sanitizedPreferences, // Store sanitized preferences (no undefined values)
+          totalGenerated: mealsWithMetadata.length
+        });
+      } catch (storeError) {
+        logger.warn("Error storing full recommendations:", storeError);
+        // Continue even if storage fails
+      }
+      
+      return {
+        meals: mealsWithMetadata,
+        requestId,
+        sessionId
+      };
+      
+    } catch (aiError) {
+      logger.error("OpenAI API error:", aiError);
+      
+      // Attempt to provide fallback recommendations
+      try {
+        // Generate simple fallback recommendations
+        const fallbackMeals = generateFallbackMeals(count, enhancedPreferences);
+        
+        return {
+          meals: fallbackMeals,
+          requestId,
+          sessionId,
+          isFallback: true
+        };
+      } catch (fallbackError) {
+        logger.error("Even fallback generation failed:", fallbackError);
+        throw new HttpsError("internal", "Failed to generate recommendations", { 
+          originalError: aiError.message,
+          fallbackError: fallbackError.message
+        });
+      }
+    }
+  } catch (error) {
+    logger.error("Error generating meal recommendations", {error: error.message, stack: error.stack});
+    throw new HttpsError("internal", "Failed to generate unique recommendations", error);
+  }
+});
 
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: "deepseek-chat",
-      messages: [
-        {role: "system", content: "You are a professional nutritionist and chef specializing in personalized meal recommendations."},
-        {role: "user", content: prompt},
-      ],
-      response_format: {type: "json_object"},
+/**
+ * Generate simple fallback meals if the AI service fails
+ */
+function generateFallbackMeals(count, preferences) {
+  const { diet = 'balanced', cuisines = [] } = preferences;
+  
+  // Some basic meal templates
+  const templates = [
+    {
+      name: "Simple Grilled Chicken",
+      description: "Tender grilled chicken breast with seasonal vegetables",
+      ingredients: ["Chicken breast", "Olive oil", "Salt", "Pepper", "Mixed vegetables"],
+      macros: { protein: "30g", carbs: "15g", fat: "12g", calories: "290 kcal" },
+      prepTime: "25 minutes",
+      cookingTip: "Don't overcook the chicken to keep it juicy"
+    },
+    {
+      name: "Vegetable Stir Fry",
+      description: "Quick and healthy vegetable stir fry with your choice of protein",
+      ingredients: ["Mixed vegetables", "Garlic", "Ginger", "Soy sauce", "Rice"],
+      macros: { protein: "18g", carbs: "40g", fat: "8g", calories: "310 kcal" },
+      prepTime: "20 minutes",
+      cookingTip: "Use high heat and keep stirring for best results"
+    },
+    {
+      name: "Mediterranean Salad",
+      description: "Fresh Mediterranean salad with olive oil dressing",
+      ingredients: ["Cucumber", "Tomatoes", "Feta cheese", "Olives", "Olive oil"],
+      macros: { protein: "12g", carbs: "18g", fat: "22g", calories: "320 kcal" },
+      prepTime: "15 minutes",
+      cookingTip: "Add the dressing just before serving"
+    },
+    {
+      name: "Hearty Vegetable Soup",
+      description: "Nutritious and warming vegetable soup",
+      ingredients: ["Carrots", "Celery", "Onions", "Vegetable broth", "Herbs"],
+      macros: { protein: "8g", carbs: "22g", fat: "5g", calories: "170 kcal" },
+      prepTime: "35 minutes",
+      cookingTip: "Simmer on low heat to develop flavors"
+    },
+    {
+      name: "Simple Bean Burrito",
+      description: "Easy bean and rice burrito with fresh salsa",
+      ingredients: ["Tortilla", "Black beans", "Rice", "Salsa", "Avocado"],
+      macros: { protein: "15g", carbs: "52g", fat: "14g", calories: "390 kcal" },
+      prepTime: "15 minutes",
+      cookingTip: "Heat the tortilla slightly before filling"
+    },
+    {
+      name: "Quick Tuna Pasta",
+      description: "Simple pasta with tuna and tomato sauce",
+      ingredients: ["Pasta", "Canned tuna", "Tomato sauce", "Olive oil", "Herbs"],
+      macros: { protein: "25g", carbs: "65g", fat: "12g", calories: "450 kcal" },
+      prepTime: "20 minutes",
+      cookingTip: "Cook the pasta al dente for best texture"
+    }
+  ];
+  
+  // Randomly select meals but ensure we don't have duplicates
+  const selectedIndices = new Set();
+  const timestamp = Date.now();
+  
+  while (selectedIndices.size < Math.min(count, templates.length)) {
+    selectedIndices.add(Math.floor(Math.random() * templates.length));
+  }
+  
+  // Create meals from the selected templates
+  return Array.from(selectedIndices).map((index, i) => {
+    const meal = {
+      ...templates[index],
+      id: `fallback-meal-${timestamp}-${i}`,
+      category: cuisines.length > 0 ? cuisines[i % cuisines.length] : "General",
+      cuisine: cuisines.length > 0 ? cuisines[i % cuisines.length] : "International",
+      uniqueness: "fallback"
+    };
+    
+    // Adjust name for diet type if provided
+    if (diet && diet !== 'balanced') {
+      meal.name = `${diet.charAt(0).toUpperCase() + diet.slice(1)} ${meal.name}`;
+    }
+    
+    return meal;
+  });
+}
+
+/**
+ * Enhanced function to build meal recommendation prompt with strong uniqueness constraints
+ */
+function buildEnhancedMealPrompt(preferences, count, requestId) {
+  const {
+    diet,
+    allergies = [],
+    cuisines = [],
+    goals = [],
+    excludedIngredients = [],
+    caloriesPerDay,
+    previouslyRecommended = [],
+    category,
+  } = preferences;
+
+  let prompt = `GENERATE ${count} COMPLETELY UNIQUE AND ORIGINAL meal ideas `;
+
+  if (diet) {
+    prompt += `for a ${diet} diet `;
+  }
+
+  if (allergies.length > 0) {
+    prompt += `that avoid these allergens: ${allergies.join(", ")}. `;
+  }
+  
+  if (category) {
+    prompt += `For category "${category}". `;
+  }
+
+  if (cuisines.length > 0) {
+    prompt += `Preferred cuisines: ${cuisines.join(", ")}. `;
+  }
+
+  if (goals.length > 0) {
+    prompt += `Health goals: ${goals.join(", ")}. `;
+  }
+
+  if (excludedIngredients.length > 0) {
+    prompt += `Please exclude these ingredients: ${excludedIngredients.join(", ")}. `;
+  }
+  
+  if (caloriesPerDay) {
+    prompt += `Target approximately ${caloriesPerDay} calories per day. `;
+  }
+  
+  // Add strong uniqueness constraints
+  prompt += `
+    CRITICAL REQUIREMENT: These meals MUST be completely different from any previously recommended meals.
+    
+    List of previously recommended meals to AVOID completely (do not recommend anything similar to these):
+    ${previouslyRecommended.slice(0, 30).join(", ")}
+    
+    For this request ID: ${requestId}, create ${count} COMPLETELY NEW meal ideas that:
+    - Have distinctive, creative names
+    - Use different primary ingredients from each other
+    - Employ varied cooking techniques 
+    - Represent different world cuisines where appropriate
+    - Have distinct flavor profiles (spicy, savory, sweet, etc.)
+    - Offer nutritional variety
+    
+    For each meal, provide:
+    1. A unique, creative name
+    2. Detailed description highlighting what makes it special
+    3. Complete list of ingredients
+    4. Precise macros (protein, carbs, fat, calories)
+    5. Preparation time
+    6. A brief cooking tip
+    
+    Format as a JSON object with this structure:
+    {
+      "meals": [
+        {
+          "name": "Unique Meal Name",
+          "description": "Detailed description",
+          "ingredients": ["ingredient 1", "ingredient 2", "..."],
+          "macros": {
+            "protein": "X g",
+            "carbs": "X g",
+            "fat": "X g",
+            "calories": "X kcal"
+          },
+          "prepTime": "X minutes",
+          "cookingTip": "Brief tip"
+        },
+        {...}
+      ]
+    }
+  `;
+
+  return prompt;
+}
+
+
+/**
+ * Clean up old recommendations for a user
+ */
+exports.cleanupOldRecommendations = onCall({
+  maxInstances: 5,
+}, async (request) => {
+  try {
+    const { userId, exceptSessionId } = request.data;
+    
+    if (!userId) {
+      throw new HttpsError("invalid-argument", "User ID is required");
+    }
+    
+    let query = db.collection("recommendations")
+      .where("userId", "==", userId);
+      
+    // If a session ID is provided, exclude it from deletion
+    if (exceptSessionId) {
+      query = query.where("sessionId", "!=", exceptSessionId);
+    }
+    
+    const oldRecs = await query.get();
+    
+    // Delete in batches for better performance
+    const batch = db.batch();
+    let deleteCount = 0;
+    
+    oldRecs.docs.forEach(doc => {
+      batch.delete(doc.ref);
+      deleteCount++;
     });
-
-    // Parse OpenAI response
-    const responseText = completion.choices[0].message.content;
-    const mealRecommendations = JSON.parse(responseText);
-
-    // Store recommendations in Firestore
-    await db.collection("recommendations").add({
-      userId: uid,
-      recommendations: mealRecommendations,
-      preferences,
-      timestamp: new Date(),
-    });
-
+    
+    await batch.commit();
+    
+    logger.info(`Cleaned up ${deleteCount} old recommendation documents for user ${userId}`);
+    
     return {
       success: true,
-      recommendations: mealRecommendations,
+      count: deleteCount
     };
   } catch (error) {
-    logger.error("Error generating meal recommendations", {error: error.message});
-    throw new HttpsError("internal", "Failed to generate recommendations", error);
+    logger.error("Error cleaning up recommendations", {error: error.message});
+    throw new HttpsError("internal", "Failed to clean up recommendations", error);
   }
 });
 
@@ -631,6 +1030,8 @@ exports.getSearchSuggestions = onCall({
     throw new HttpsError("internal", "Failed to generate suggestions", error);
   }
 });
+
+
 
 /**
  * Process AI chatbot requests
