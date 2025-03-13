@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import UnderlineInput from "./util/UnderlineInput";
 import PasswordInput from "./util/PasswordInput";
 import ErrorToast from "./ErrorToast";
 import { registerUser } from "@/lib/service/authService";
 import { useRouter } from "next/navigation";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 const RegisterForm = () => {
   const [email, setEmail] = useState("");
@@ -14,7 +16,24 @@ const RegisterForm = () => {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const router = useRouter();
+
+  // Check if user is already authenticated
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is already signed in, redirect to trending page
+        router.push("/trending");
+      } else {
+        // User is not signed in, allow them to register
+        setCheckingAuth(false);
+      }
+    });
+
+    // Clean up subscription
+    return () => unsubscribe();
+  }, [router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,6 +63,14 @@ const RegisterForm = () => {
       setIsLoading(false);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-neutral-800">
+        <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-neutral-800">
