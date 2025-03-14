@@ -22,8 +22,9 @@ Known Issues:
 
 TODO Tomorrow:
     - When Clicking on the Recommended meal, it'll be added to the recipes documents with the necessary values(Update the cloud function if needed) /
-    - Options Page Functionality *
+    - Options Page Functionality /
     - Update Meal Form Page /
-    - Refactored Profile Page *
+    - Refactored Profile Page **
+        - Remove Recent Recipes
     - Remove Categories in the MealTable component /
     - Delete Recipe Button /
