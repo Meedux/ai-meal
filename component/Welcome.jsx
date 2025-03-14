@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 
 const Welcome = ({ user }) => {
   const today = new Date().toLocaleDateString('en-US', { 
@@ -20,6 +20,8 @@ const Welcome = ({ user }) => {
   });
   
   useEffect(() => {
+    let unsubscribe = null;
+    
     const fetchUserData = async () => {
       if (!user) {
         setLoading(false);
@@ -41,42 +43,53 @@ const Welcome = ({ user }) => {
             fat: 70
           };
           
-          // Get today's date in YYYY-MM-DD format for querying taken_macros
+          // Get today's date in YYYY-MM-DD format
           const todayFormatted = new Date().toISOString().split('T')[0];
           
-          // Get today's consumed macros from taken_macros subcollection
-          let currentMacros = {
-            calories: 0,
-            protein: 0,
-            carbs: 0,
-            fat: 0
-          };
-          
-          const takenMacrosDoc = await getDoc(
-            doc(db, "users", user.uid, "taken_macros", todayFormatted)
+          // Set up a real-time listener for taken_macros
+          unsubscribe = onSnapshot(
+            doc(db, "users", user.uid, "taken_macros", todayFormatted),
+            (takenMacrosDoc) => {
+              let currentMacros = {
+                calories: 0,
+                protein: 0,
+                carbs: 0,
+                fat: 0
+              };
+              
+              if (takenMacrosDoc.exists()) {
+                const takenMacrosData = takenMacrosDoc.data();
+                currentMacros = takenMacrosData.total || currentMacros;
+              }
+              
+              // Update the macros state with real-time values
+              setMacros({
+                calories: { current: currentMacros.calories, goal: targetMacros.calories, color: "from-green-500 to-emerald-400" },
+                protein: { current: currentMacros.protein, goal: targetMacros.protein, color: "from-blue-500 to-cyan-400" },
+                carbs: { current: currentMacros.carbs, goal: targetMacros.carbs, color: "from-amber-500 to-yellow-400" },
+                fat: { current: currentMacros.fat, goal: targetMacros.fat, color: "from-rose-500 to-pink-400" }
+              });
+              
+              setLoading(false);
+            },
+            (error) => {
+              console.error("Error listening to taken_macros:", error);
+              setLoading(false);
+            }
           );
-          
-          if (takenMacrosDoc.exists()) {
-            const takenMacrosData = takenMacrosDoc.data();
-            currentMacros = takenMacrosData.total || currentMacros;
-          }
-          
-          // Update the macros state with actual values
-          setMacros({
-            calories: { current: currentMacros.calories, goal: targetMacros.calories, color: "from-green-500 to-emerald-400" },
-            protein: { current: currentMacros.protein, goal: targetMacros.protein, color: "from-blue-500 to-cyan-400" },
-            carbs: { current: currentMacros.carbs, goal: targetMacros.carbs, color: "from-amber-500 to-yellow-400" },
-            fat: { current: currentMacros.fat, goal: targetMacros.fat, color: "from-rose-500 to-pink-400" }
-          });
         }
       } catch (error) {
         console.error("Error fetching user data:", error);
-      } finally {
         setLoading(false);
       }
     };
     
     fetchUserData();
+    
+    // Clean up the listener when component unmounts
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [user]);
 
   // Calculate percentages safely

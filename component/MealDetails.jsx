@@ -14,6 +14,11 @@ import { addMealToToday, addMealToPlan } from "@/lib/service/meal";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
+import { addMealToTracking } from "@/lib/service/meal-tracking";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+
+
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -103,12 +108,29 @@ const MealDetails = () => {
       });
       return;
     }
-
+  
     try {
       setAddingToToday(true);
       setStatusMessage(null);
-
+  
+      // 1. Add to dailyMeals collection
       const result = await addMealToToday(mealId, meal);
+      
+      // 2. Also update the taken_macros document with proper macro values
+      if (meal.macros) {
+        await addMealToTracking(user.uid, {
+          name: meal.name,
+          id: mealId,
+          macros: {
+            calories: Number(meal.macros.calories) || 0,
+            protein: Number(meal.macros.protein) || 0,
+            carbs: Number(meal.macros.carbs) || 0,
+            fat: Number(meal.macros.fat) || 0
+          },
+          image: meal.image || null
+        });
+      }
+      
       setStatusMessage({ type: "success", text: result.message });
     } catch (error) {
       console.error("Failed to add meal to today's plan:", error);
