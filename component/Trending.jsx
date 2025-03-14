@@ -48,8 +48,8 @@ const Trending = () => {
           <div className="col-span-1">
             <Card>
               <div className="mb-6">
-                <h2 className="text-2xl font-bold text-white">Trending Meals</h2>
-                <p className="text-neutral-400 mt-1">Explore popular recipes created by our community</p>
+                <h2 className="text-2xl font-bold text-white">AI Recommendations</h2>
+                <p className="text-neutral-400 mt-1">Discover meals that will make your taste buds dance!</p>
               </div>
               <MealTable />
             </Card>

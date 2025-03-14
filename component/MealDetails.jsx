@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
 import { getRecipeById } from "@/lib/service/meal";
+import { deleteRecipe } from "@/lib/service/meal";
+import { useRouter } from "next/navigation";
 
 // For the pie chart
 import { Pie } from "react-chartjs-2";
@@ -20,13 +22,16 @@ const MealDetails = () => {
   const params = useParams();
   const mealId = params.id;
 
+  const router = useRouter();
+
+  const [isDeleting, setIsDeleting] = useState(false);
   const [meal, setMeal] = useState(null);
   const [activeTab, setActiveTab] = useState("instructions");
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [visibleInstructions, setVisibleInstructions] = useState([]);
-  
+
   // Replace useAuth with direct Firebase auth
   const [user, setUser] = useState(null);
   const [addingToToday, setAddingToToday] = useState(false);
@@ -38,7 +43,7 @@ const MealDetails = () => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
     });
-    
+
     // Clean up subscription
     return () => unsubscribe();
   }, []);
@@ -139,6 +144,36 @@ const MealDetails = () => {
       });
     } finally {
       setAddingToPlan(false);
+    }
+  };
+
+  const handleDeleteRecipe = async () => {
+    // Show confirmation dialog
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this recipe? This action cannot be undone."
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await deleteRecipe(mealId);
+      setStatusMessage({
+        type: "success",
+        text: "Recipe deleted successfully!",
+      });
+
+      // Navigate to meals page after short delay
+      setTimeout(() => {
+        router.push("/meal");
+      }, 1500);
+    } catch (error) {
+      console.error("Error deleting recipe:", error);
+      setStatusMessage({
+        type: "error",
+        text: error.message || "Failed to delete recipe",
+      });
+      setIsDeleting(false);
     }
   };
 
@@ -681,6 +716,55 @@ const MealDetails = () => {
             <h2 className="text-lg font-bold text-white mb-4">
               Add To Your Plan
             </h2>
+            {/* Only show Edit button if user owns this meal */}
+            {user && meal.userId === user.uid && (
+              <>
+                <button
+                  className="btn btn-secondary w-full flex items-center justify-center mt-2"
+                  onClick={() => router.push(`/meal/${mealId}/edit`)}
+                >
+                  <svg
+                    className="w-5 h-5 mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                    />
+                  </svg>
+                  Edit Recipe
+                </button>
+
+                <button
+                  className="btn btn-error w-full flex items-center justify-center mt-2"
+                  onClick={handleDeleteRecipe}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <span className="loading loading-spinner loading-sm mr-2"></span>
+                  ) : (
+                    <svg
+                      className="w-5 h-5 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  )}
+                  {isDeleting ? "Deleting..." : "Delete Recipe"}
+                </button>
+              </>
+            )}
             <div className="mt-4 flex flex-col space-y-2">
               <button
                 className="btn btn-primary w-full flex items-center justify-center"

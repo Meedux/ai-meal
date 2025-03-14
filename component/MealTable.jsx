@@ -3,15 +3,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import { auth, db } from "@/lib/firebase";
 import { getMealRecommendations, getTrendingRecipes, clearPreviousRecommendations } from "@/lib/service/AI";
-import { doc, getDoc, collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const MealTable = ({ id = "default" }) => {
+  const router = useRouter();
   const [meals, setMeals] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Already true initially - will show loading state immediately
   const [generatingNew, setGeneratingNew] = useState(false);
   const [error, setError] = useState(null);
-  const [categoryFilter, setCategoryFilter] = useState("");
   const [hasMore, setHasMore] = useState(true);
   const [user, setUser] = useState(null);
   const [userPreferences, setUserPreferences] = useState(null);
@@ -19,18 +20,81 @@ const MealTable = ({ id = "default" }) => {
   const [firebaseBlocked, setFirebaseBlocked] = useState(false);
   const sessionIdRef = useRef(`session-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
 
-  // Fetch categories for dropdown
-  const [categories, setCategories] = useState([
-    "Italian",
-    "Chinese",
-    "Mexican",
-    "Indian",
-    "Thai",
-    "Mediterranean",
-    "American",
-    "Japanese",
-    "French",
-  ]);
+  // Save recommendation to recipes collection when clicked
+const saveRecommendationToRecipes = async (meal) => {
+  if (!user || firebaseBlocked) {
+    return meal.id; // Just return the ID for navigation if user not signed in or Firebase blocked
+  }
+
+  try {
+    // Check if recipe already exists in recipes collection
+    const recipeRef = doc(db, "recipes", meal.id);
+    const recipeSnap = await getDoc(recipeRef);
+
+    if (!recipeSnap.exists()) {
+      // Transform ingredients from string array to structured objects
+      let formattedIngredients = [];
+      
+      if (meal.ingredients && Array.isArray(meal.ingredients)) {
+        formattedIngredients = meal.ingredients.map(ingredient => {
+          return {
+            name: ingredient, // Original ingredient text
+            quantity: null,   // Default to null
+            unit: "g"         // Default to grams
+          };
+        });
+      }
+      
+      // Create a recipe object with necessary fields and transformed ingredients
+      const recipeData = {
+        ...meal,
+        ingredients: formattedIngredients, // Replace with formatted ingredients
+        userId: user.uid,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        fromRecommendation: true,
+        savedFromRecommendationAt: new Date(),
+        source: "ai-recommendation"
+      };
+
+      // Save to recipes collection
+      await setDoc(recipeRef, recipeData);
+      console.log("Recommendation saved to recipes:", meal.id);
+    } else {
+      console.log("Recipe already exists in collection:", meal.id);
+    }
+    
+    return meal.id;
+  } catch (error) {
+    console.error("Error saving recommendation to recipes:", error);
+    if (error.message && error.message.includes('ERR_BLOCKED_BY_CLIENT')) {
+      setFirebaseBlocked(true);
+    }
+    return meal.id; // Return ID even on error for navigation
+  }
+};
+
+  // Handle meal click - save to recipes and navigate
+  const handleMealClick = async (e, meal) => {
+    e.preventDefault(); // Prevent default Link behavior
+    
+    try {
+      // Show saving state
+      setGeneratingNew(true);
+      
+      // Save to recipes collection and get ID
+      const mealId = await saveRecommendationToRecipes(meal);
+      
+      // Navigate to meal page
+      router.push(`/meal/${mealId}`);
+    } catch (err) {
+      console.error("Error handling meal click:", err);
+      // Fall back to default navigation
+      router.push(`/meal/${meal.id}`);
+    } finally {
+      setGeneratingNew(false);
+    }
+  };
 
   // Clear old recommendations when component mounts or unmounts
   useEffect(() => {
@@ -56,6 +120,8 @@ const MealTable = ({ id = "default" }) => {
 
   // Initialize by checking for user and loading meals
   useEffect(() => {
+    // Loading is already true from initial state, showing the loading UI immediately
+    
     const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
       setUser(currentUser);
       
@@ -67,11 +133,6 @@ const MealTable = ({ id = "default" }) => {
             if (userDoc.exists()) {
               const userData = userDoc.data();
               setUserPreferences(userData.preferences || null);
-              
-              // Set default category from user preferences if available
-              if (userData.preferences?.defaultCategory) {
-                setCategoryFilter(userData.preferences.defaultCategory);
-              }
             }
           } catch (prefError) {
             // Handle errors fetching preferences
@@ -143,7 +204,7 @@ const MealTable = ({ id = "default" }) => {
 
   // Fetch meals based on user preferences with improved error handling
   const fetchPersonalizedMeals = async (userId, isInitialLoad = false) => {
-    setLoading(true);
+    setLoading(true); // Ensure loading state is set
     if (!isInitialLoad) {
       setGeneratingNew(true);
     }
@@ -160,12 +221,12 @@ const MealTable = ({ id = "default" }) => {
       const response = await getMealRecommendations(userId, {
         count: 4,
         excludeMealIds: shownMealIds,
-        category: categoryFilter || null, // Use null instead of undefined
+        category: null, // No category filtering now
         forceNew: true,
         timestamp: Date.now(),
         sessionId: sessionIdRef.current,
         previousSessionsCleaned: isInitialLoad,
-        offlineMode: firebaseBlocked // Flag for service layer to use offline mode if needed
+        offlineMode: firebaseBlocked
       });
 
       // Extract meals from response and ensure we have an array
@@ -229,7 +290,7 @@ const MealTable = ({ id = "default" }) => {
 
   // Fetch trending meals as a fallback
   const fetchTrendingMeals = async (isInitialLoad = false) => {
-    setLoading(true);
+    setLoading(true); // Ensure loading state is set
     if (!isInitialLoad) {
       setGeneratingNew(true);
     }
@@ -283,7 +344,7 @@ const MealTable = ({ id = "default" }) => {
     }
   };
 
-  // Load more AI recommendations
+  // Load more AI recommendations (kept from original)
   const loadMoreRecommendations = async () => {
     if (!hasMore) return;
     if (!user || firebaseBlocked) {
@@ -298,7 +359,7 @@ const MealTable = ({ id = "default" }) => {
       const response = await getMealRecommendations(user.uid, {
         count: 4,
         excludeMealIds: shownMealIds,
-        category: categoryFilter || null, // Use null instead of undefined
+        category: null, // No category filtering
         forceNew: true,
         timestamp: Date.now(),
         sessionId: sessionIdRef.current,
@@ -341,81 +402,12 @@ const MealTable = ({ id = "default" }) => {
     }
   };
 
-  // New function to refresh recommendations with optional new category
-  const refreshRecommendations = async (newCategory = null) => {
-    if (!user || firebaseBlocked) {
-      return fetchTrendingMeals(true);
-    }
-    
-    setLoading(true);
-    setGeneratingNew(true);
-    setError(null); // Clear any previous errors
-    
-    // If a new category is provided, update the state
-    if (newCategory !== null) {
-      setCategoryFilter(newCategory);
-    }
-    
-    try {
-      // Reset shown meal IDs to start fresh
-      setShownMealIds([]);
-      
-      const response = await getMealRecommendations(user.uid, {
-        count: 4,
-        category: newCategory !== null ? newCategory : (categoryFilter || null),
-        forceNew: true,
-        timestamp: Date.now(),
-        sessionId: sessionIdRef.current,
-        offlineMode: firebaseBlocked
-      });
-      
-      const recommendations = response?.meals || [];
-      
-      if (Array.isArray(recommendations) && recommendations.length > 0) {
-        setMeals(recommendations);
-        
-        // Track the IDs of shown meals
-        const newMealIds = recommendations.map(meal => meal.id).filter(Boolean);
-        setShownMealIds(newMealIds);
-        
-        setHasMore(recommendations.length === 4);
-      } else {
-        console.warn("Received empty or non-array recommendations:", recommendations);
-        setMeals([]);
-        setHasMore(false);
-      }
-    } catch (err) {
-      console.error("Error refreshing recommendations:", err);
-      
-      // Check for blocked by client error
-      if (err.message && err.message.includes('ERR_BLOCKED_BY_CLIENT')) {
-        setFirebaseBlocked(true);
-        setError("Your browser appears to be blocking our database connections. Please disable any ad blockers or privacy extensions for this site.");
-        return await fetchTrendingMeals(true);
-      }
-      
-      setError("Could not load recommendations. Please try again later.");
-      setMeals([]);
-      setHasMore(false);
-    } finally {
-      setLoading(false);
-      setGeneratingNew(false);
-    }
-  };
-
-  // Handle category filter change - use the refresh function
-  const handleCategoryChange = async (e) => {
-    const category = e.target.value;
-    await refreshRecommendations(category);
-  };
-
   // Show loading skeleton
   if (loading && (!meals || meals.length === 0)) {
     return (
       <div className="w-full">
-        <div className="flex flex-col sm:flex-row gap-4 mb-6 animate-pulse">
-          <div className="h-10 bg-neutral-800 rounded-lg flex-grow"></div>
-          <div className="h-10 w-32 bg-neutral-800 rounded-lg"></div>
+        <div className="flex justify-end mb-6 animate-pulse">
+          <div className="h-10 w-56 bg-neutral-800 rounded-lg"></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -469,10 +461,9 @@ const MealTable = ({ id = "default" }) => {
 
           <div className="flex flex-col sm:flex-row justify-center gap-3">
             <button
-              onClick={() =>
-                user && !firebaseBlocked
-                  ? refreshRecommendations() 
-                  : fetchTrendingMeals(true)
+              onClick={() => user && !firebaseBlocked 
+                ? fetchPersonalizedMeals(user.uid, true) 
+                : fetchTrendingMeals(true)
               }
               className="btn btn-outline btn-primary"
             >
@@ -513,44 +504,15 @@ const MealTable = ({ id = "default" }) => {
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-neutral-800 p-8 rounded-lg shadow-xl max-w-sm mx-auto text-center">
             <div className="animate-spin w-16 h-16 mb-6 mx-auto border-4 border-primary border-t-transparent rounded-full"></div>
-            <h3 className="text-2xl font-medium text-white mb-3">Creating New Recipes</h3>
+            <h3 className="text-2xl font-medium text-white mb-3">
+              {generatingNew ? "Processing Recipe..." : "Creating New Recipes"}
+            </h3>
             <p className="text-neutral-300 mb-1">
-              Our AI is crafting unique meal recommendations just for you...
-            </p>
-            <p className="text-xs text-neutral-500 mt-3">
-              Each recipe is guaranteed to be different from previous suggestions
+              {generatingNew ? "Saving this recipe to your collection..." : "Our AI is crafting unique meal recommendations just for you..."}
             </p>
           </div>
         </div>
       )}
-
-      {/* Enhanced filter controls */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <select
-          className="py-2 px-4 rounded-lg bg-neutral-800 border-none text-white focus:ring-2 focus:ring-primary/40 w-full sm:w-auto"
-          value={categoryFilter}
-          onChange={handleCategoryChange}
-          disabled={loading || generatingNew}
-        >
-          <option value="" key="category-all">All Categories</option>
-          {categories.map((category, index) => (
-            <option key={`category-${index}-${category}`} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-        
-        <button
-          className="py-2 px-4 rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 focus:ring-2 focus:ring-primary/40"
-          onClick={() => refreshRecommendations(categoryFilter)}
-          disabled={loading || generatingNew}
-        >
-          <svg className="w-5 h-5 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Refresh
-        </button>
-      </div>
 
       {/* User-specific recommendations banner */}
       {user && userPreferences && !firebaseBlocked && (
@@ -563,7 +525,6 @@ const MealTable = ({ id = "default" }) => {
               `and preference for ${userPreferences.cuisines
                 .slice(0, 2)
                 .join(", ")} cuisine`}
-            {categoryFilter && ` • Filtered by ${categoryFilter}`}
           </p>
         </div>
       )}
@@ -573,7 +534,7 @@ const MealTable = ({ id = "default" }) => {
         <div className="text-center py-12">
           <p className="text-xl text-neutral-400 mb-2">No meal recommendations found</p>
           <p className="text-sm text-neutral-500">
-            Try adjusting your preferences or category filter
+            Try generating new recommendations
           </p>
         </div>
       )}
@@ -581,9 +542,9 @@ const MealTable = ({ id = "default" }) => {
       {/* Meal grid layout with opacity when generating */}
       <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${generatingNew ? 'opacity-40 pointer-events-none' : ''}`}>
         {Array.isArray(meals) && meals.map((meal, index) => (
-          <Link 
+          <div 
             key={meal.id ? `meal-${meal.id}` : `meal-index-${index}`}
-            href={`/meal/${meal.id}`}
+            onClick={(e) => handleMealClick(e, meal)}
             className="bg-neutral-800/40 rounded-lg overflow-hidden hover:bg-neutral-700/30 transition-colors cursor-pointer group"
           >
             <div className="p-4 flex gap-4">
@@ -650,7 +611,7 @@ const MealTable = ({ id = "default" }) => {
                 </div>
               </div>
             </div>
-          </Link>
+          </div>
         ))}
       </div>
 

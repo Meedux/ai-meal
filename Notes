@@ -13,16 +13,17 @@ AI Integration:
 Known Issues:
     CORS issue when uploading an Image
     Failed to cache recommendations: FirebaseError: Function addDoc() called with invalid data. Unsupported field value: undefined (found in field preferences.category in document recommendations/SNOUl35nQL9Q5Io8cLS0) /
-    
+
     MealTable.jsx:97 
             
             
-           POST https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fai-meal-planner-310bf%2Fdatabases%2F(default)&gsessionid=oZpnijEvYP22opC2QishO281YWr4Rke4risZzeosPeQ&SID=S-7i3yXFnK_eNv_9K9msvA&RID=35219&TYPE=terminate&zx=joaize1wx06l net::ERR_BLOCKED_BY_CLIENT
+           POST https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?VER=8&database=projects%2Fai-meal-planner-310bf%2Fdatabases%2F(default)&gsessionid=oZpnijEvYP22opC2QishO281YWr4Rke4risZzeosPeQ&SID=S-7i3yXFnK_eNv_9K9msvA&RID=35219&TYPE=terminate&zx=joaize1wx06l net::ERR_BLOCKED_BY_CLIENT /
 
 
 TODO Tomorrow:
-    - When Clicking on the Recommended meal, it'll be added to the recipes documents with the necessary values(Update the cloud function if needed) *
-    - Options Page Functionality
-    - Update Meal Form Page
-    - Refactored Profile Page 
-    - MealTable List Updating when selecting a category *
+    - When Clicking on the Recommended meal, it'll be added to the recipes documents with the necessary values(Update the cloud function if needed) /
+    - Options Page Functionality *
+    - Update Meal Form Page /
+    - Refactored Profile Page *
+    - Remove Categories in the MealTable component /
+    - Delete Recipe Button *
