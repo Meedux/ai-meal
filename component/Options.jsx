@@ -1,22 +1,120 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
+import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 
 const Options = () => {
+  const router = useRouter();
+  
+  // State management
   const [activeTab, setActiveTab] = useState('account');
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
   
   // Form state for account settings
   const [accountForm, setAccountForm] = useState({
-    name: "Alex Johnson",
-    email: "alex.johnson@example.com"
+    name: "",
+    email: ""
   });
   
   // State for dietary preferences
   const [selectedDiet, setSelectedDiet] = useState('Omnivore');
   const [cuisinePreferences, setCuisinePreferences] = useState([]);
   const [additionalPreferences, setAdditionalPreferences] = useState([]);
+  
+  // State for health goals
+  const [primaryGoal, setPrimaryGoal] = useState('Maintain Weight');
+  const [calorieTarget, setCalorieTarget] = useState(2000);
+  const [macros, setMacros] = useState({
+    protein: 30,
+    carbs: 40,
+    fat: 30
+  });
+  
+  // Calculate macros in grams based on percentages
+  const calculateMacrosInGrams = () => {
+    const proteinGrams = Math.round((calorieTarget * (macros.protein / 100)) / 4); // 4 calories per gram of protein
+    const carbsGrams = Math.round((calorieTarget * (macros.carbs / 100)) / 4);     // 4 calories per gram of carbs
+    const fatGrams = Math.round((calorieTarget * (macros.fat / 100)) / 9);         // 9 calories per gram of fat
+    return { proteinGrams, carbsGrams, fatGrams };
+  };
+
+  const { proteinGrams, carbsGrams, fatGrams } = calculateMacrosInGrams();
+  
+  // Auth listener - check if user is logged in
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        await loadUserData(currentUser.uid);
+      } else {
+        setLoading(false);
+        router.push('/login'); // Redirect to login if not authenticated
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [router]);
+  
+  // Load user data from Firestore
+  const loadUserData = async (userId) => {
+    try {
+      setLoading(true);
+      const userDoc = await getDoc(doc(db, "users", userId));
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // Populate account form
+        setAccountForm({
+          name: userData.name || "",
+          email: user?.email || ""
+        });
+        
+        // Populate dietary preferences
+        if (userData.preferences) {
+          setSelectedDiet(userData.preferences.diet || 'Omnivore');
+          setCuisinePreferences(userData.preferences.cuisines || []);
+          setAdditionalPreferences(userData.preferences.additional || []);
+        }
+        
+        // Populate health goals
+        if (userData.target_macros) {
+          setCalorieTarget(userData.target_macros.calories || 2000);
+          
+          // Calculate percentages from gram values if they exist
+          const targetMacros = userData.target_macros;
+          const totalCalories = targetMacros.calories || 2000;
+          
+          if (targetMacros.protein && targetMacros.carbs && targetMacros.fat) {
+            const proteinPercentage = Math.round((targetMacros.protein * 4 / totalCalories) * 100);
+            const carbsPercentage = Math.round((targetMacros.carbs * 4 / totalCalories) * 100);
+            const fatPercentage = Math.round((targetMacros.fat * 9 / totalCalories) * 100);
+            
+            setMacros({
+              protein: proteinPercentage,
+              carbs: carbsPercentage,
+              fat: fatPercentage
+            });
+          }
+          
+          setPrimaryGoal(userData.goal || 'Maintain Weight');
+        }
+      }
+    } catch (err) {
+      console.error("Error loading user data:", err);
+      setError("Failed to load your preferences. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Handle account form changes
   const handleAccountChange = (e) => {
@@ -44,6 +142,127 @@ const Options = () => {
     }
   };
   
+  // Handle macro distribution changes
+  const handleMacroChange = (macro, value) => {
+    // Update the specified macro
+    const updatedMacros = { ...macros, [macro]: parseInt(value) };
+    
+    // Ensure the sum of all macros is 100%
+    const sum = Object.values(updatedMacros).reduce((a, b) => a + b, 0);
+    
+    if (sum !== 100) {
+      // Adjust other macros proportionally
+      const macroKeys = Object.keys(updatedMacros).filter(key => key !== macro);
+      const remaining = 100 - updatedMacros[macro];
+      const currentSum = macroKeys.reduce((sum, key) => sum + updatedMacros[key], 0);
+      
+      if (currentSum > 0) {  // Prevent division by zero
+        macroKeys.forEach(key => {
+          updatedMacros[key] = Math.round(updatedMacros[key] * (remaining / currentSum));
+        });
+      } else {
+        // Distribute remaining percentage evenly
+        macroKeys.forEach(key => {
+          updatedMacros[key] = Math.round(remaining / macroKeys.length);
+        });
+      }
+    }
+    
+    setMacros(updatedMacros);
+  };
+  
+  // Save account settings
+  const saveAccountSettings = async () => {
+    if (!user) return;
+    
+    try {
+      setSaving(true);
+      await updateDoc(doc(db, "users", user.uid), {
+        name: accountForm.name,
+        updatedAt: new Date()
+      });
+      
+      toast.success("Account settings updated successfully!");
+    } catch (err) {
+      console.error("Error updating account:", err);
+      toast.error("Failed to update account settings.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  
+  // Save dietary preferences
+  const saveDietaryPreferences = async () => {
+    if (!user) return;
+    
+    try {
+      setSaving(true);
+      await updateDoc(doc(db, "users", user.uid), {
+        preferences: {
+          diet: selectedDiet,
+          cuisines: cuisinePreferences,
+          additional: additionalPreferences
+        },
+        updatedAt: new Date()
+      });
+      
+      toast.success("Dietary preferences updated successfully!");
+    } catch (err) {
+      console.error("Error updating preferences:", err);
+      toast.error("Failed to update dietary preferences.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  
+  // Save health goals
+  const saveHealthGoals = async () => {
+    if (!user) return;
+    
+    const { proteinGrams, carbsGrams, fatGrams } = calculateMacrosInGrams();
+    
+    try {
+      setSaving(true);
+      
+      await updateDoc(doc(db, "users", user.uid), {
+        goal: primaryGoal,
+        target_macros: {
+          calories: parseInt(calorieTarget),
+          protein: proteinGrams,
+          carbs: carbsGrams,
+          fat: fatGrams
+        },
+        updatedAt: new Date()
+      });
+      
+      // Also update taken_macros for current date to ensure chart displays correctly
+      const today = new Date().toISOString().split('T')[0];
+      const takenMacrosRef = doc(db, "users", user.uid, "taken_macros", today);
+      
+      const takenMacrosDoc = await getDoc(takenMacrosRef);
+      if (!takenMacrosDoc.exists()) {
+        // Create an initial empty document if it doesn't exist
+        await updateDoc(takenMacrosRef, {
+          date: today,
+          total: {
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0
+          },
+          meals: []
+        });
+      }
+      
+      toast.success("Health goals updated successfully!");
+    } catch (err) {
+      console.error("Error updating health goals:", err);
+      toast.error("Failed to update health goals.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  
   // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -62,6 +281,17 @@ const Options = () => {
     }
   };
   
+  // Display loading state
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-16 max-w-6xl">
+        <div className="flex justify-center items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <motion.div
@@ -72,6 +302,13 @@ const Options = () => {
         <h1 className="text-2xl font-bold text-white">Settings & Preferences</h1>
         <p className="text-neutral-400">Customize your experience and dietary requirements</p>
       </motion.div>
+      
+      {/* Display error message if there's an error */}
+      {error && (
+        <div className="bg-red-900/30 text-red-200 p-4 rounded-lg mb-6">
+          <p>{error}</p>
+        </div>
+      )}
       
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar Navigation */}
@@ -121,58 +358,6 @@ const Options = () => {
                   Health Goals
                 </button>
               </li>
-              {/* <li>
-                <button 
-                  onClick={() => setActiveTab('allergies')}
-                  className={`w-full text-left px-4 py-2 rounded-lg flex items-center ${
-                    activeTab === 'allergies' ? 'bg-primary text-white' : 'text-neutral-300 hover:bg-neutral-700'
-                  }`}
-                >
-                  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  Allergies & Restrictions
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => setActiveTab('notifications')}
-                  className={`w-full text-left px-4 py-2 rounded-lg flex items-center ${
-                    activeTab === 'notifications' ? 'bg-primary text-white' : 'text-neutral-300 hover:bg-neutral-700'
-                  }`}
-                >
-                  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
-                  Notifications
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => setActiveTab('privacy')}
-                  className={`w-full text-left px-4 py-2 rounded-lg flex items-center ${
-                    activeTab === 'privacy' ? 'bg-primary text-white' : 'text-neutral-300 hover:bg-neutral-700'
-                  }`}
-                >
-                  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  Privacy & Security
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => setActiveTab('appearance')}
-                  className={`w-full text-left px-4 py-2 rounded-lg flex items-center ${
-                    activeTab === 'appearance' ? 'bg-primary text-white' : 'text-neutral-300 hover:bg-neutral-700'
-                  }`}
-                >
-                  <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-                  </svg>
-                  Appearance
-                </button>
-              </li> */}
             </ul>
           </nav>
         </motion.div>
@@ -193,7 +378,7 @@ const Options = () => {
                 <div className="flex items-center space-x-4">
                   <div className="relative">
                     <img 
-                      src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80" 
+                      src={user?.photoURL || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80"} 
                       alt="Profile" 
                       className="w-16 h-16 rounded-full object-cover"
                     />
@@ -224,9 +409,10 @@ const Options = () => {
                   type="email" 
                   name="email"
                   value={accountForm.email}
-                  onChange={handleAccountChange}
-                  className="w-full bg-neutral-700 border-0 rounded-lg p-2 text-white focus:ring-2 focus:ring-primary"
+                  disabled
+                  className="w-full bg-neutral-700/50 border-0 rounded-lg p-2 text-white/70"
                 />
+                <p className="text-xs text-neutral-400 mt-1">Email cannot be changed. This is your login email.</p>
               </motion.div>
               
               <motion.div variants={itemVariants} className="mb-6">
@@ -235,7 +421,13 @@ const Options = () => {
               </motion.div>
             
               <motion.div variants={itemVariants} className="mt-10">
-                <button className="btn btn-primary">Save Changes</button>
+                <button 
+                  className={`btn btn-primary ${saving ? 'loading' : ''}`}
+                  onClick={saveAccountSettings}
+                  disabled={saving}
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
               </motion.div>
             </motion.div>
           )}
@@ -305,7 +497,13 @@ const Options = () => {
               </motion.div>
               
               <motion.div variants={itemVariants} className="mt-10">
-                <button className="btn btn-primary">Save Preferences</button>
+                <button 
+                  className={`btn btn-primary ${saving ? 'loading' : ''}`}
+                  onClick={saveDietaryPreferences}
+                  disabled={saving}
+                >
+                  {saving ? 'Saving...' : 'Save Preferences'}
+                </button>
               </motion.div>
             </motion.div>
           )}
@@ -321,7 +519,11 @@ const Options = () => {
               
               <motion.div variants={itemVariants} className="mb-6">
                 <label className="block text-sm font-medium text-neutral-300 mb-2">Primary Goal</label>
-                <select className="w-full bg-neutral-700 border-0 rounded-lg p-2 text-white focus:ring-2 focus:ring-primary">
+                <select 
+                  className="w-full bg-neutral-700 border-0 rounded-lg p-2 text-white focus:ring-2 focus:ring-primary"
+                  value={primaryGoal}
+                  onChange={(e) => setPrimaryGoal(e.target.value)}
+                >
                   <option>Weight Loss</option>
                   <option>Muscle Gain</option>
                   <option>Maintain Weight</option>
@@ -334,7 +536,8 @@ const Options = () => {
                 <label className="block text-sm font-medium text-neutral-300 mb-2">Daily Calorie Target</label>
                 <input 
                   type="number" 
-                  defaultValue="2200"
+                  value={calorieTarget}
+                  onChange={(e) => setCalorieTarget(e.target.value)}
                   className="w-full bg-neutral-700 border-0 rounded-lg p-2 text-white focus:ring-2 focus:ring-primary"
                 />
               </motion.div>
@@ -345,59 +548,101 @@ const Options = () => {
                 <div className="space-y-4">
                   <div>
                     <div className="flex justify-between text-sm mb-1">
-                      <span>Protein: 30%</span>
-                      <span>165g</span>
+                      <span>Protein: {macros.protein}%</span>
+                      <span>{proteinGrams}g</span>
                     </div>
                     <input 
                       type="range" 
                       min="10" 
                       max="60" 
-                      defaultValue="30"
+                      value={macros.protein}
+                      onChange={(e) => handleMacroChange('protein', e.target.value)}
                       className="range range-primary w-full" 
                     />
                   </div>
                   
                   <div>
                     <div className="flex justify-between text-sm mb-1">
-                      <span>Carbs: 40%</span>
-                      <span>220g</span>
+                      <span>Carbs: {macros.carbs}%</span>
+                      <span>{carbsGrams}g</span>
                     </div>
                     <input 
                       type="range" 
                       min="10" 
                       max="70" 
-                      defaultValue="40"
+                      value={macros.carbs}
+                      onChange={(e) => handleMacroChange('carbs', e.target.value)}
                       className="range range-primary w-full" 
                     />
                   </div>
                   
                   <div>
                     <div className="flex justify-between text-sm mb-1">
-                      <span>Fat: 30%</span>
-                      <span>73g</span>
+                      <span>Fat: {macros.fat}%</span>
+                      <span>{fatGrams}g</span>
                     </div>
                     <input 
                       type="range" 
                       min="10" 
                       max="60" 
-                      defaultValue="30"
+                      value={macros.fat}
+                      onChange={(e) => handleMacroChange('fat', e.target.value)}
                       className="range range-primary w-full" 
                     />
+                  </div>
+                </div>
+                
+                <div className="mt-4 p-4 bg-neutral-700/50 rounded-lg">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-white font-medium">Macro Distribution</span>
+                    <span className="text-sm text-neutral-400">Total: {macros.protein + macros.carbs + macros.fat}%</span>
+                  </div>
+                  <div className="w-full h-3 bg-neutral-600 rounded-full overflow-hidden flex">
+                    <div 
+                      className="bg-blue-500 h-full"
+                      style={{ width: `${macros.protein}%` }}
+                    ></div>
+                    <div 
+                      className="bg-yellow-500 h-full"
+                      style={{ width: `${macros.carbs}%` }}
+                    ></div>
+                    <div 
+                      className="bg-red-500 h-full"
+                      style={{ width: `${macros.fat}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex text-xs mt-2 text-neutral-400 justify-between">
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>
+                      <span>Protein</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-yellow-500 rounded-full mr-1"></div>
+                      <span>Carbs</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-red-500 rounded-full mr-1"></div>
+                      <span>Fat</span>
+                    </div>
                   </div>
                 </div>
               </motion.div>
               
               <motion.div variants={itemVariants} className="mt-10">
-                <button className="btn btn-primary">Save Health Goals</button>
+                <button 
+                  className={`btn btn-primary ${saving ? 'loading' : ''}`}
+                  onClick={saveHealthGoals}
+                  disabled={saving}
+                >
+                  {saving ? 'Saving...' : 'Save Health Goals'}
+                </button>
               </motion.div>
             </motion.div>
           )}
-          
-          {/* Additional tabs would go here... */}
         </div>
       </div>
     </div>
   );
 };
 
-export default Options;
+export default Options// filepath: c:\Users\herre\OneDrive\Documents\web\ai-meal\component\Options.jsx
