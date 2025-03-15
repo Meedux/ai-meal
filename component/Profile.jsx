@@ -1,15 +1,24 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import Link from 'next/link';
+import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import Link from "next/link";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
-import { useRouter } from 'next/navigation';
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit,
+} from "firebase/firestore";
+import { useRouter } from "next/navigation";
 
 // For charts
-import { Line } from 'react-chartjs-2';
+import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -19,7 +28,9 @@ import {
   Title,
   Tooltip,
   Legend,
-} from 'chart.js';
+} from "chart.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { updateDoc } from "firebase/firestore";
 
 // Register Chart.js components
 ChartJS.register(
@@ -34,7 +45,7 @@ ChartJS.register(
 
 const Profile = () => {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState("overview");
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
@@ -43,13 +54,13 @@ const Profile = () => {
     calories: [],
     protein: [],
     carbs: [],
-    fat: []
+    fat: [],
   });
   const [todayMacros, setTodayMacros] = useState({
     calories: { current: 0, goal: 2000 },
     protein: { current: 0, goal: 150 },
     carbs: { current: 0, goal: 200 },
-    fat: { current: 0, goal: 70 }
+    fat: { current: 0, goal: 70 },
   });
 
   // Auth listener - check if user is logged in
@@ -62,30 +73,84 @@ const Profile = () => {
         await fetchWeeklyMacros(currentUser.uid);
       } else {
         setLoading(false);
-        router.push('/login'); // Redirect to login if not authenticated
+        router.push("/login"); // Redirect to login if not authenticated
       }
     });
-    
+
     return () => unsubscribe();
   }, [router]);
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !user) return;
+  
+    try {
+      // Show loading state
+      setLoading(true);
+      
+      // Create a reference to the storage location
+      const storage = getStorage();
+      const fileRef = ref(storage, `profile-pictures/${user.uid}`);
+  
+      // Upload the image
+      await uploadBytes(fileRef, file);
+      console.log("Upload successful");
+  
+      // Get the download URL
+      const downloadURL = await getDownloadURL(fileRef);
+  
+      // Update the user document in Firestore
+      await updateDoc(doc(db, "users", user.uid), {
+        image: downloadURL,
+        updatedAt: new Date() // Add timestamp for the update
+      });
+  
+      // Update local state
+      setUserData({
+        ...userData,
+        image: downloadURL,
+      });
+  
+      // Show success message
+      alert("Profile picture updated successfully!");
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      alert(`Failed to upload image: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch user profile data
   const fetchUserData = async (userId) => {
     try {
       const userDoc = await getDoc(doc(db, "users", userId));
-      
+
       if (userDoc.exists()) {
         const data = userDoc.data();
+
+        // Use a default placeholder image if none exists
+        const defaultProfileImage =
+          "https://api.dicebear.com/7.x/initials/svg?seed=" +
+          encodeURIComponent(data.name || "User") +
+          "&backgroundColor=0369a1";
+
         setUserData({
           name: data.name || "User",
           email: auth.currentUser?.email || "",
-          image: data.image || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?ixlib=rb-1.2.1&auto=format&fit=crop&w=300&q=80",
+          image: data.image || defaultProfileImage,
           target_macros: data.target_macros || {
             calories: 2000,
             protein: 150,
             carbs: 200,
-            fat: 70
-          }
+            fat: 70,
+          },
+          preferences: data.preferences || {
+            diet: "none",
+            allergies: [],
+            cuisines: [],
+            additional: [],
+          },
         });
       }
     } catch (error) {
@@ -96,24 +161,42 @@ const Profile = () => {
   // Fetch today's macros
   const fetchTodayMacros = async (userId) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const takenMacrosDoc = await getDoc(doc(db, "users", userId, "taken_macros", today));
-      
+      const today = new Date().toISOString().split("T")[0];
+      const takenMacrosDoc = await getDoc(
+        doc(db, "users", userId, "taken_macros", today)
+      );
+
       if (takenMacrosDoc.exists()) {
         const data = takenMacrosDoc.data();
-        const currentMacros = data.total || { calories: 0, protein: 0, carbs: 0, fat: 0 };
-        
+        const currentMacros = data.total || {
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+        };
+
         // Get user's target macros
         const userDoc = await getDoc(doc(db, "users", userId));
-        const targetMacros = userDoc.exists() ? 
-          (userDoc.data().target_macros || { calories: 2000, protein: 150, carbs: 200, fat: 70 }) : 
-          { calories: 2000, protein: 150, carbs: 200, fat: 70 };
-        
+        const targetMacros = userDoc.exists()
+          ? userDoc.data().target_macros || {
+              calories: 2000,
+              protein: 150,
+              carbs: 200,
+              fat: 70,
+            }
+          : { calories: 2000, protein: 150, carbs: 200, fat: 70 };
+
         setTodayMacros({
-          calories: { current: currentMacros.calories, goal: targetMacros.calories },
-          protein: { current: currentMacros.protein, goal: targetMacros.protein },
+          calories: {
+            current: currentMacros.calories,
+            goal: targetMacros.calories,
+          },
+          protein: {
+            current: currentMacros.protein,
+            goal: targetMacros.protein,
+          },
           carbs: { current: currentMacros.carbs, goal: targetMacros.carbs },
-          fat: { current: currentMacros.fat, goal: targetMacros.fat }
+          fat: { current: currentMacros.fat, goal: targetMacros.fat },
         });
       }
     } catch (error) {
@@ -132,12 +215,14 @@ const Profile = () => {
       for (let i = 6; i >= 0; i--) {
         const date = new Date(today);
         date.setDate(today.getDate() - i);
-        dates.push(date.toISOString().split('T')[0]);
+        dates.push(date.toISOString().split("T")[0]);
       }
 
       // Format dates for display on the chart (e.g., "Mon", "Tue", etc.)
-      const displayDates = dates.map(date => {
-        const day = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
+      const displayDates = dates.map((date) => {
+        const day = new Date(date).toLocaleDateString("en-US", {
+          weekday: "short",
+        });
         return day;
       });
 
@@ -149,12 +234,19 @@ const Profile = () => {
 
       // Fetch data for each date
       for (let i = 0; i < dates.length; i++) {
-        const macrosDoc = await getDoc(doc(db, "users", userId, "taken_macros", dates[i]));
-        
+        const macrosDoc = await getDoc(
+          doc(db, "users", userId, "taken_macros", dates[i])
+        );
+
         if (macrosDoc.exists()) {
           const data = macrosDoc.data();
-          const total = data.total || { calories: 0, protein: 0, carbs: 0, fat: 0 };
-          
+          const total = data.total || {
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+          };
+
           caloriesData[i] = total.calories;
           proteinData[i] = total.protein;
           carbsData[i] = total.carbs;
@@ -167,7 +259,7 @@ const Profile = () => {
         calories: caloriesData,
         protein: proteinData,
         carbs: carbsData,
-        fat: fatData
+        fat: fatData,
       });
     } catch (error) {
       console.error("Error fetching weekly macros:", error);
@@ -185,34 +277,34 @@ const Profile = () => {
     labels: weeklyMacros.dates,
     datasets: [
       {
-        label: 'Calories',
+        label: "Calories",
         data: weeklyMacros.calories,
-        borderColor: 'rgba(75, 192, 192, 1)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-        tension: 0.3
+        borderColor: "rgba(75, 192, 192, 1)",
+        backgroundColor: "rgba(75, 192, 192, 0.2)",
+        tension: 0.3,
       },
       {
-        label: 'Protein (g)',
+        label: "Protein (g)",
         data: weeklyMacros.protein,
-        borderColor: 'rgba(153, 102, 255, 1)',
-        backgroundColor: 'rgba(153, 102, 255, 0.2)',
-        tension: 0.3
+        borderColor: "rgba(153, 102, 255, 1)",
+        backgroundColor: "rgba(153, 102, 255, 0.2)",
+        tension: 0.3,
       },
       {
-        label: 'Carbs (g)',
+        label: "Carbs (g)",
         data: weeklyMacros.carbs,
-        borderColor: 'rgba(255, 206, 86, 1)',
-        backgroundColor: 'rgba(255, 206, 86, 0.2)',
-        tension: 0.3
+        borderColor: "rgba(255, 206, 86, 1)",
+        backgroundColor: "rgba(255, 206, 86, 0.2)",
+        tension: 0.3,
       },
       {
-        label: 'Fat (g)',
+        label: "Fat (g)",
         data: weeklyMacros.fat,
-        borderColor: 'rgba(255, 99, 132, 1)',
-        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-        tension: 0.3
-      }
-    ]
+        borderColor: "rgba(255, 99, 132, 1)",
+        backgroundColor: "rgba(255, 99, 132, 0.2)",
+        tension: 0.3,
+      },
+    ],
   };
 
   const chartOptions = {
@@ -222,48 +314,48 @@ const Profile = () => {
       y: {
         beginAtZero: false,
         grid: {
-          color: 'rgba(255, 255, 255, 0.1)'
+          color: "rgba(255, 255, 255, 0.1)",
         },
         ticks: {
-          color: 'rgba(255, 255, 255, 0.7)'
-        }
+          color: "rgba(255, 255, 255, 0.7)",
+        },
       },
       x: {
         grid: {
-          color: 'rgba(255, 255, 255, 0.1)'
+          color: "rgba(255, 255, 255, 0.1)",
         },
         ticks: {
-          color: 'rgba(255, 255, 255, 0.7)'
-        }
-      }
+          color: "rgba(255, 255, 255, 0.7)",
+        },
+      },
     },
     plugins: {
       legend: {
         labels: {
-          color: 'rgba(255, 255, 255, 0.7)'
-        }
-      }
-    }
+          color: "rgba(255, 255, 255, 0.7)",
+        },
+      },
+    },
   };
 
   // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: { 
+    visible: {
       opacity: 1,
-      transition: { 
-        staggerChildren: 0.1
-      }
-    }
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
   };
 
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
-    visible: { 
-      y: 0, 
+    visible: {
+      y: 0,
       opacity: 1,
-      transition: { duration: 0.4 }
-    }
+      transition: { duration: 0.4 },
+    },
   };
 
   // Display loading state
@@ -280,7 +372,7 @@ const Profile = () => {
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       {/* Profile Header */}
-      <motion.div 
+      <motion.div
         className="bg-neutral-800 rounded-xl p-6 mb-8 shadow-lg"
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -288,114 +380,182 @@ const Profile = () => {
       >
         <div className="flex flex-col md:flex-row items-start md:items-center">
           <div className="relative mr-6 mb-4 md:mb-0">
-            <img 
-              src={userData?.image} 
-              alt="Profile" 
+            <img
+              src={userData?.image}
+              alt="Profile"
               className="w-24 h-24 rounded-full object-cover border-4 border-primary/30"
+              onError={(e) => {
+                // If image fails to load, use initials-based placeholder
+                e.target.src = `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(
+                  userData?.name || "User"
+                )}&backgroundColor=0369a1`;
+              }}
             />
-            <div className="absolute bottom-0 right-0 bg-primary rounded-full w-6 h-6 flex items-center justify-center border-2 border-neutral-800">
-              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            <label
+              htmlFor="profile-upload"
+              className="absolute bottom-0 right-0 bg-primary rounded-full w-6 h-6 flex items-center justify-center border-2 border-neutral-800 cursor-pointer"
+            >
+              <svg
+                className="w-3 h-3 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                />
               </svg>
-            </div>
+              <input
+                type="file"
+                id="profile-upload"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+            </label>
           </div>
-          
+
           <div className="flex-grow">
             <div className="flex justify-between items-start">
               <div>
-                <h1 className="text-2xl font-bold text-white mb-1">{userData?.name}</h1>
+                <h1 className="text-2xl font-bold text-white mb-1">
+                  {userData?.name}
+                </h1>
                 <p className="text-neutral-400 text-sm">{userData?.email}</p>
               </div>
-              
-              <Link 
-                href="/options" 
-                className="btn btn-sm btn-outline"
-              >
+
+              <Link href="/options" className="btn btn-sm btn-outline">
                 Edit Profile
               </Link>
             </div>
           </div>
         </div>
       </motion.div>
-      
+
       {/* Tab Navigation */}
       <div className="flex border-b border-neutral-700 mb-8">
-        <button 
-          className={`pb-2 px-4 font-medium mr-4 transition-colors ${activeTab === 'overview' ? 'text-primary border-b-2 border-primary' : 'text-neutral-400 hover:text-white'}`}
-          onClick={() => setActiveTab('overview')}
+        <button
+          className={`pb-2 px-4 font-medium mr-4 transition-colors ${
+            activeTab === "overview"
+              ? "text-primary border-b-2 border-primary"
+              : "text-neutral-400 hover:text-white"
+          }`}
+          onClick={() => setActiveTab("overview")}
         >
           Overview
         </button>
-        <button 
-          className={`pb-2 px-4 font-medium transition-colors ${activeTab === 'macros' ? 'text-primary border-b-2 border-primary' : 'text-neutral-400 hover:text-white'}`}
-          onClick={() => setActiveTab('macros')}
+        <button
+          className={`pb-2 px-4 font-medium transition-colors ${
+            activeTab === "macros"
+              ? "text-primary border-b-2 border-primary"
+              : "text-neutral-400 hover:text-white"
+          }`}
+          onClick={() => setActiveTab("macros")}
         >
           Macro Tracking
         </button>
       </div>
-      
+
       {/* Tab Content */}
       <div>
         {/* Overview Tab */}
-        {activeTab === 'overview' && (
+        {activeTab === "overview" && (
           <motion.div
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+            className="grid grid-cols-1 md:grid-cols-2 gap-6"
           >
             {/* Today's Summary */}
-            <motion.div variants={itemVariants} className="bg-neutral-800 rounded-xl p-6 shadow-lg">
-              <h2 className="text-lg font-medium text-white mb-4">Today's Summary</h2>
+            <motion.div
+              variants={itemVariants}
+              className="bg-neutral-800 rounded-xl p-6 shadow-lg"
+            >
+              <h2 className="text-lg font-medium text-white mb-4">
+                Today's Summary
+              </h2>
               <div className="space-y-4">
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-neutral-400">Calories</span>
-                    <span className="text-white">{todayMacros.calories.current} / {todayMacros.calories.goal} kcal</span>
+                    <span className="text-white">
+                      {todayMacros.calories.current} /{" "}
+                      {todayMacros.calories.goal} kcal
+                    </span>
                   </div>
                   <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-green-500 rounded-full"
-                      style={{ width: `${calculatePercentage(todayMacros.calories.current, todayMacros.calories.goal)}%` }}
+                      style={{
+                        width: `${calculatePercentage(
+                          todayMacros.calories.current,
+                          todayMacros.calories.goal
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-neutral-400">Protein</span>
-                    <span className="text-white">{todayMacros.protein.current}g / {todayMacros.protein.goal}g</span>
+                    <span className="text-white">
+                      {todayMacros.protein.current}g /{" "}
+                      {todayMacros.protein.goal}g
+                    </span>
                   </div>
                   <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-blue-500 rounded-full"
-                      style={{ width: `${calculatePercentage(todayMacros.protein.current, todayMacros.protein.goal)}%` }}
+                      style={{
+                        width: `${calculatePercentage(
+                          todayMacros.protein.current,
+                          todayMacros.protein.goal
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-neutral-400">Carbs</span>
-                    <span className="text-white">{todayMacros.carbs.current}g / {todayMacros.carbs.goal}g</span>
+                    <span className="text-white">
+                      {todayMacros.carbs.current}g / {todayMacros.carbs.goal}g
+                    </span>
                   </div>
                   <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-yellow-500 rounded-full"
-                      style={{ width: `${calculatePercentage(todayMacros.carbs.current, todayMacros.carbs.goal)}%` }}
+                      style={{
+                        width: `${calculatePercentage(
+                          todayMacros.carbs.current,
+                          todayMacros.carbs.goal
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-neutral-400">Fat</span>
-                    <span className="text-white">{todayMacros.fat.current}g / {todayMacros.fat.goal}g</span>
+                    <span className="text-white">
+                      {todayMacros.fat.current}g / {todayMacros.fat.goal}g
+                    </span>
                   </div>
                   <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-red-500 rounded-full"
-                      style={{ width: `${calculatePercentage(todayMacros.fat.current, todayMacros.fat.goal)}%` }}
+                      style={{
+                        width: `${calculatePercentage(
+                          todayMacros.fat.current,
+                          todayMacros.fat.goal
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
@@ -406,19 +566,109 @@ const Profile = () => {
                 </Link>
               </div>
             </motion.div>
-            
+
+            <motion.div
+              variants={itemVariants}
+              className="bg-neutral-800 rounded-xl p-6 shadow-lg"
+            >
+              <h2 className="text-lg font-medium text-white mb-4">
+                Dietary Preferences
+              </h2>
+              <div className="space-y-4">
+                <div className="flex items-center">
+                  <div className="w-2 h-2 bg-primary rounded-full mr-2"></div>
+                  <span className="text-white capitalize">
+                    Diet: {userData?.preferences?.diet || "None"}
+                  </span>
+                </div>
+
+                {userData?.preferences?.allergies &&
+                userData.preferences.allergies.length > 0 ? (
+                  <div>
+                    <p className="text-neutral-400 mb-2">Allergies:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {userData.preferences.allergies.map((allergy, index) => (
+                        <span
+                          key={index}
+                          className="px-2 py-1 bg-neutral-700 rounded-md text-white text-xs"
+                        >
+                          {allergy}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-neutral-400">No allergies specified</p>
+                )}
+
+                {userData?.preferences?.cuisines &&
+                userData.preferences.cuisines.length > 0 ? (
+                  <div>
+                    <p className="text-neutral-400 mb-2">Favorite Cuisines:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {userData.preferences.cuisines.map((cuisine, index) => (
+                        <span
+                          key={index}
+                          className="px-2 py-1 bg-neutral-700 rounded-md text-white text-xs"
+                        >
+                          {cuisine}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-neutral-400">No preferred cuisines</p>
+                )}
+
+                {userData?.preferences?.additional &&
+                userData.preferences.additional.length > 0 ? (
+                  <div>
+                    <p className="text-neutral-400 mb-2">
+                      Additional Preferences:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {userData.preferences.additional.map((pref, index) => (
+                        <span
+                          key={index}
+                          className="px-2 py-1 bg-neutral-700 rounded-md text-white text-xs"
+                        >
+                          {pref}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-neutral-400">No additional preferences</p>
+                )}
+              </div>
+
+              <div className="mt-6">
+                <Link
+                  href="/options#preferences"
+                  className="btn btn-outline btn-primary w-full"
+                >
+                  Edit Preferences
+                </Link>
+              </div>
+            </motion.div>
+
             {/* Weekly Progress */}
-            <motion.div variants={itemVariants} className="bg-neutral-800 rounded-xl p-6 shadow-lg md:col-span-2">
-              <h2 className="text-lg font-medium text-white mb-4">Weekly Nutrition Trends</h2>
+            <motion.div
+              variants={itemVariants}
+              className="bg-neutral-800 rounded-xl p-6 shadow-lg md:col-span-2"
+            >
+              <h2 className="text-lg font-medium text-white mb-4">
+                Weekly Nutrition Trends
+              </h2>
               <div className="h-64">
                 <Line data={chartData} options={chartOptions} />
               </div>
             </motion.div>
           </motion.div>
         )}
-        
+
         {/* Macro Tracking Tab */}
-        {activeTab === 'macros' && (
+        {activeTab === "macros" && (
           <motion.div
             variants={containerVariants}
             initial="hidden"
@@ -426,111 +676,179 @@ const Profile = () => {
             className="grid grid-cols-1 md:grid-cols-2 gap-6"
           >
             {/* Weekly Chart */}
-            <motion.div 
+            <motion.div
               className="bg-neutral-800 rounded-xl p-6 shadow-lg md:col-span-2"
               variants={itemVariants}
             >
-              <h2 className="text-lg font-medium text-white mb-4">Weekly Nutrition Trends</h2>
+              <h2 className="text-lg font-medium text-white mb-4">
+                Weekly Nutrition Trends
+              </h2>
               <div className="h-64">
                 <Line data={chartData} options={chartOptions} />
               </div>
             </motion.div>
-            
+
             {/* Today's Macros */}
-            <motion.div 
+            <motion.div
               className="bg-neutral-800 rounded-xl p-6 shadow-lg"
               variants={itemVariants}
             >
-              <h2 className="text-lg font-medium text-white mb-4">Today's Macros</h2>
+              <h2 className="text-lg font-medium text-white mb-4">
+                Today's Macros
+              </h2>
               <div className="space-y-4">
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-neutral-400">Calories</span>
-                    <span className="text-white">{todayMacros.calories.current} / {todayMacros.calories.goal} kcal</span>
+                    <span className="text-white">
+                      {todayMacros.calories.current} /{" "}
+                      {todayMacros.calories.goal} kcal
+                    </span>
                   </div>
                   <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-green-500 rounded-full"
-                      style={{ width: `${calculatePercentage(todayMacros.calories.current, todayMacros.calories.goal)}%` }}
+                      style={{
+                        width: `${calculatePercentage(
+                          todayMacros.calories.current,
+                          todayMacros.calories.goal
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-neutral-400">Protein</span>
-                    <span className="text-white">{todayMacros.protein.current}g / {todayMacros.protein.goal}g</span>
+                    <span className="text-white">
+                      {todayMacros.protein.current}g /{" "}
+                      {todayMacros.protein.goal}g
+                    </span>
                   </div>
                   <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-blue-500 rounded-full"
-                      style={{ width: `${calculatePercentage(todayMacros.protein.current, todayMacros.protein.goal)}%` }}
+                      style={{
+                        width: `${calculatePercentage(
+                          todayMacros.protein.current,
+                          todayMacros.protein.goal
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-neutral-400">Carbs</span>
-                    <span className="text-white">{todayMacros.carbs.current}g / {todayMacros.carbs.goal}g</span>
+                    <span className="text-white">
+                      {todayMacros.carbs.current}g / {todayMacros.carbs.goal}g
+                    </span>
                   </div>
                   <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-yellow-500 rounded-full"
-                      style={{ width: `${calculatePercentage(todayMacros.carbs.current, todayMacros.carbs.goal)}%` }}
+                      style={{
+                        width: `${calculatePercentage(
+                          todayMacros.carbs.current,
+                          todayMacros.carbs.goal
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-neutral-400">Fat</span>
-                    <span className="text-white">{todayMacros.fat.current}g / {todayMacros.fat.goal}g</span>
+                    <span className="text-white">
+                      {todayMacros.fat.current}g / {todayMacros.fat.goal}g
+                    </span>
                   </div>
                   <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-red-500 rounded-full"
-                      style={{ width: `${calculatePercentage(todayMacros.fat.current, todayMacros.fat.goal)}%` }}
+                      style={{
+                        width: `${calculatePercentage(
+                          todayMacros.fat.current,
+                          todayMacros.fat.goal
+                        )}%`,
+                      }}
                     />
                   </div>
                 </div>
               </div>
-              
-              <Link href="/meal" className="w-full mt-6 py-2 text-sm bg-primary hover:bg-primary-focus text-white rounded-md transition-colors block text-center">
+
+              <Link
+                href="/meal"
+                className="w-full mt-6 py-2 text-sm bg-primary hover:bg-primary-focus text-white rounded-md transition-colors block text-center"
+              >
                 Add Food
               </Link>
             </motion.div>
-            
+
             {/* Today's Meal Summary */}
             <motion.div
               className="bg-neutral-800 rounded-xl p-6 shadow-lg"
               variants={itemVariants}
             >
-              <h2 className="text-lg font-medium text-white mb-4">Nutrition Breakdown</h2>
-              
+              <h2 className="text-lg font-medium text-white mb-4">
+                Nutrition Breakdown
+              </h2>
+
               {/* Macronutrient Distribution */}
               <div className="mt-4 p-4 bg-neutral-700/50 rounded-lg">
                 <div className="flex justify-between mb-2">
-                  <span className="text-white font-medium">Macro Distribution</span>
+                  <span className="text-white font-medium">
+                    Macro Distribution
+                  </span>
                 </div>
                 <div className="w-full h-5 bg-neutral-600 rounded-full overflow-hidden flex">
-                  <div 
+                  <div
                     className="bg-blue-500 h-full flex items-center justify-center text-xs text-white"
-                    style={{ width: `${calculatePercentage(todayMacros.protein.current * 4, todayMacros.calories.current)}%` }}
+                    style={{
+                      width: `${calculatePercentage(
+                        todayMacros.protein.current * 4,
+                        todayMacros.calories.current
+                      )}%`,
+                    }}
                   >
-                    {calculatePercentage(todayMacros.protein.current * 4, todayMacros.calories.current)}%
+                    {calculatePercentage(
+                      todayMacros.protein.current * 4,
+                      todayMacros.calories.current
+                    )}
+                    %
                   </div>
-                  <div 
+                  <div
                     className="bg-yellow-500 h-full flex items-center justify-center text-xs text-white"
-                    style={{ width: `${calculatePercentage(todayMacros.carbs.current * 4, todayMacros.calories.current)}%` }}
+                    style={{
+                      width: `${calculatePercentage(
+                        todayMacros.carbs.current * 4,
+                        todayMacros.calories.current
+                      )}%`,
+                    }}
                   >
-                    {calculatePercentage(todayMacros.carbs.current * 4, todayMacros.calories.current)}%
+                    {calculatePercentage(
+                      todayMacros.carbs.current * 4,
+                      todayMacros.calories.current
+                    )}
+                    %
                   </div>
-                  <div 
+                  <div
                     className="bg-red-500 h-full flex items-center justify-center text-xs text-white"
-                    style={{ width: `${calculatePercentage(todayMacros.fat.current * 9, todayMacros.calories.current)}%` }}
+                    style={{
+                      width: `${calculatePercentage(
+                        todayMacros.fat.current * 9,
+                        todayMacros.calories.current
+                      )}%`,
+                    }}
                   >
-                    {calculatePercentage(todayMacros.fat.current * 9, todayMacros.calories.current)}%
+                    {calculatePercentage(
+                      todayMacros.fat.current * 9,
+                      todayMacros.calories.current
+                    )}
+                    %
                   </div>
                 </div>
                 <div className="flex text-xs mt-2 text-neutral-400 justify-between">
@@ -548,9 +866,12 @@ const Profile = () => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-6">
-                <Link href="/options" className="btn btn-outline btn-primary w-full">
+                <Link
+                  href="/options"
+                  className="btn btn-outline btn-primary w-full"
+                >
                   Adjust Targets
                 </Link>
               </div>
