@@ -6,18 +6,21 @@ import { updateDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 const MacroModal = ({ user, onComplete, date = new Date() }) => {
+  // Store input values as strings to allow complete backspacing
   const [macros, setMacros] = useState({
-    calories: 2000,
-    protein: 150,
-    carbs: 200,
-    fat: 70
+    calories: "2000",
+    protein: "150",
+    carbs: "200",
+    fat: "70"
   });
   
   const handleChange = (e) => {
     const { name, value } = e.target;
+    
+    // Store as string to allow empty input and proper backspacing
     setMacros({
       ...macros,
-      [name]: parseInt(value) || 0
+      [name]: value
     });
   };
   
@@ -29,9 +32,17 @@ const MacroModal = ({ user, onComplete, date = new Date() }) => {
     try {
       const formattedDate = formatDate(date);
       
+      // Convert to numbers only when submitting
+      const numericMacros = {
+        calories: macros.calories === "" ? 0 : Number(macros.calories),
+        protein: macros.protein === "" ? 0 : Number(macros.protein),
+        carbs: macros.carbs === "" ? 0 : Number(macros.carbs),
+        fat: macros.fat === "" ? 0 : Number(macros.fat)
+      };
+      
       // Update target macros in the user document
       await updateDoc(doc(db, "users", user.uid), {
-        target_macros: macros,
+        target_macros: numericMacros,
         lastMacroDate: formattedDate
       });
       

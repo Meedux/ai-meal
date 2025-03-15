@@ -14,7 +14,8 @@ const PreferenceModal = ({ user, onComplete }) => {
   
   // Diet options
   const dietOptions = [
-    { value: 'none', label: 'No Specific Diet' },
+    { value: 'none', label: 'None' },
+    { value: 'no_specific', label: 'No Specific Diet' },
     { value: 'vegetarian', label: 'Vegetarian' },
     { value: 'vegan', label: 'Vegan' },
     { value: 'keto', label: 'Keto' },

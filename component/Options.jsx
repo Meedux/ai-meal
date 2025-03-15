@@ -445,7 +445,7 @@ const Options = () => {
                 <p className="text-neutral-400 mb-4">Select your diet type:</p>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {['Omnivore', 'Vegetarian', 'Vegan', 'Pescatarian', 'Keto', 'Paleo', 'Mediterranean'].map((diet) => (
+                  {['Omnivore', 'Vegetarian', 'Vegan', 'Pescatarian', 'Keto', 'Paleo', 'Mediterranean', "None"].map((diet) => (
                     <label key={diet} className="flex items-center bg-neutral-700 p-3 rounded-lg cursor-pointer hover:bg-neutral-600 transition-colors">
                       <input 
                         type="radio" 
