@@ -18,7 +18,6 @@ import { addMealToTracking } from "@/lib/service/meal-tracking";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -108,14 +107,14 @@ const MealDetails = () => {
       });
       return;
     }
-  
+
     try {
       setAddingToToday(true);
       setStatusMessage(null);
-  
+
       // 1. Add to dailyMeals collection
       const result = await addMealToToday(mealId, meal);
-      
+
       // 2. Also update the taken_macros document with proper macro values
       if (meal.macros) {
         await addMealToTracking(user.uid, {
@@ -125,12 +124,12 @@ const MealDetails = () => {
             calories: Number(meal.macros.calories) || 0,
             protein: Number(meal.macros.protein) || 0,
             carbs: Number(meal.macros.carbs) || 0,
-            fat: Number(meal.macros.fat) || 0
+            fat: Number(meal.macros.fat) || 0,
           },
-          image: meal.image || null
+          image: meal.image || null,
         });
       }
-      
+
       setStatusMessage({ type: "success", text: result.message });
     } catch (error) {
       console.error("Failed to add meal to today's plan:", error);
@@ -742,7 +741,7 @@ const MealDetails = () => {
             {user && meal.userId === user.uid && (
               <>
                 <button
-                  className="btn btn-secondary w-full flex items-center justify-center mt-2"
+                  className="btn btn-info w-full flex items-center justify-center mt-2"
                   onClick={() => router.push(`/meal/${mealId}/edit`)}
                 >
                   <svg
@@ -762,7 +761,7 @@ const MealDetails = () => {
                 </button>
 
                 <button
-                  className="btn btn-error w-full flex items-center justify-center mt-2"
+                  className="btn bg-blue-800 hover:bg-blue-900 text-white w-full flex items-center justify-center mt-2"
                   onClick={handleDeleteRecipe}
                   disabled={isDeleting}
                 >
