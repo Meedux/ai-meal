@@ -4,7 +4,11 @@ import React, { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { auth, db } from "@/lib/firebase";
-import { getRecipeById, updateRecipe } from "@/lib/service/meal";
+import {
+  getRecipeById,
+  updateRecipe,
+  uploadRecipeImage,
+} from "@/lib/service/meal";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@/lib/firebase";
 import Card from "@/component/util/Card";
@@ -15,6 +19,7 @@ const EditMeal = () => {
   const params = useParams();
   const mealId = params?.id;
 
+  const [imageUploading, setImageUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState(null);
@@ -170,15 +175,28 @@ const EditMeal = () => {
   // Image handling
   const handleImageChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setImage(file);
-      const reader = new FileReader();
-      reader.onload = () => {
-        setImagePreview(reader.result);
-        setUseExternalImage(false);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    
+    // Add file validation
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image is too large. Please use an image smaller than 5MB.");
+      return;
     }
+    
+    if (!file.type.startsWith('image/')) {
+      setError("Please select a valid image file.");
+      return;
+    }
+    
+    setImage(file);
+    setError(null); // Clear any previous errors
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagePreview(reader.result);
+      setUseExternalImage(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   // Add/remove ingredient fields
@@ -323,22 +341,32 @@ const EditMeal = () => {
         externalImageUrl &&
         externalImageUrl !== originalImage
       ) {
+        // Using external URL
+        console.log("Using new external image URL");
         recipeData.image = externalImageUrl;
       } else if (image) {
+        // Using uploaded file - use the service function
         try {
-          const imageUrl = await uploadImage(image);
-          recipeData.image = imageUrl;
+          setImageUploading(true);
+          console.log("Uploading image using uploadRecipeImage service");
+          const imageUrl = await uploadRecipeImage(mealId, image);
+          recipeData.image = imageUrl; // This will be both set on recipeData and updated in Firestore
+          setImageUploading(false);
         } catch (imageError) {
-          console.error(
-            "Image upload failed, continuing with original image:",
-            imageError
+          setImageUploading(false);
+          console.error("Image upload failed:", imageError);
+          setError(
+            `Failed to upload image: ${imageError.message}. Using previous image if available.`
           );
+
+          // Keep original image if available
           if (originalImage) {
-            recipeData.image = originalImage; // Keep original image if upload fails
+            recipeData.image = originalImage;
           }
         }
       } else if (originalImage) {
-        recipeData.image = originalImage; // Keep original image
+        // Keep original image
+        recipeData.image = originalImage;
       }
 
       // Update recipe in Firestore
@@ -568,9 +596,12 @@ const EditMeal = () => {
                           src={imagePreview}
                           alt="Preview"
                           className="h-40 object-cover rounded-md"
+                          width={300}
+                          height={200}
                         />
                       </div>
                     )}
+
                     <div className="mt-2">
                       <button
                         type="button"
@@ -903,12 +934,14 @@ const EditMeal = () => {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={isLoading}
+                  disabled={isLoading || imageUploading}
                 >
-                  {isLoading ? (
+                  {isLoading || imageUploading ? (
                     <>
                       <span className="loading loading-spinner loading-sm"></span>
-                      Updating...
+                      {imageUploading
+                        ? "Uploading Image..."
+                        : "Updating Meal..."}
                     </>
                   ) : (
                     "Update Meal"
