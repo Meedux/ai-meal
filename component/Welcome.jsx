@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import MealCalendarModal from "./MealCalendarModal";
 
 const Welcome = ({ user }) => {
   const today = new Date().toLocaleDateString('en-US', { 
@@ -18,6 +19,7 @@ const Welcome = ({ user }) => {
     carbs: { current: 0, goal: 200, color: "from-amber-500 to-yellow-400" },
     fat: { current: 0, goal: 70, color: "from-rose-500 to-pink-400" }
   });
+  const [showMealPlanner, setShowMealPlanner] = useState(false);
   
   useEffect(() => {
     let unsubscribe = null;
@@ -117,14 +119,35 @@ const Welcome = ({ user }) => {
         </div>
         
         {user && (
-          <div className="mt-4 md:mt-0 bg-neutral-800/50 px-4 py-2 rounded-lg flex items-center gap-2">
-            <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <span className="text-white">Daily Nutrition Tracker</span>
+          <div className="flex mt-4 md:mt-0 gap-2">
+            <button
+              onClick={() => setShowMealPlanner(true)}
+              className="bg-primary hover:bg-primary/80 transition-colors text-white px-4 py-2 rounded-lg flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span>Meal Planner</span>
+            </button>
+            
+            <div className="bg-neutral-800/50 px-4 py-2 rounded-lg flex items-center gap-2">
+              <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <span className="text-white">Daily Nutrition</span>
+            </div>
           </div>
         )}
       </div>
+      
+      {/* Meal Calendar Modal */}
+      {user && (
+        <MealCalendarModal 
+          isOpen={showMealPlanner}
+          onClose={() => setShowMealPlanner(false)}
+          userId={user.uid}
+        />
+      )}
       
       {user ? (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -138,6 +161,7 @@ const Welcome = ({ user }) => {
               </p>
             </div>
             
+            {/* Rest of the existing component code remains the same */}
             <div className="flex justify-center py-4">
               <div className="relative h-36 w-36 flex items-center justify-center">
                 <svg className="h-full w-full" viewBox="0 0 36 36">

@@ -17,6 +17,8 @@ import { auth } from "@/lib/firebase";
 import { addMealToTracking } from "@/lib/service/meal-tracking";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import DatePickerModal from "./DatePickerModal";
+import { addMealToPlanWithDate } from "@/lib/service/meal";
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -35,6 +37,7 @@ const MealDetails = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [visibleInstructions, setVisibleInstructions] = useState([]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Replace useAuth with direct Firebase auth
   const [user, setUser] = useState(null);
@@ -82,7 +85,7 @@ const MealDetails = () => {
         userId: user.uid,
         mealUserId: meal.userId,
         createdBy: meal.createdBy,
-        isOwner: meal.userId === user.uid || meal.createdBy === user.uid
+        isOwner: meal.userId === user.uid || meal.createdBy === user.uid,
       });
     }
   }, [meal, user]);
@@ -108,6 +111,33 @@ const MealDetails = () => {
   const fadeIn = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 },
+  };
+
+  const handleDateSelected = async (selectedDate) => {
+    try {
+      setAddingToPlan(true);
+      setStatusMessage(null);
+
+      const result = await addMealToPlanWithDate(mealId, meal, selectedDate);
+      setStatusMessage({
+        type: "success",
+        text: `Meal added to your plan for ${new Date(
+          selectedDate
+        ).toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        })}`,
+      });
+    } catch (error) {
+      console.error("Failed to add meal to plan:", error);
+      setStatusMessage({
+        type: "error",
+        text: error.message || "Failed to add meal",
+      });
+    } finally {
+      setAddingToPlan(false);
+    }
   };
 
   // Handler functions using direct Firebase auth
@@ -163,21 +193,8 @@ const MealDetails = () => {
       return;
     }
 
-    try {
-      setAddingToPlan(true);
-      setStatusMessage(null);
-
-      const result = await addMealToPlan(mealId, meal);
-      setStatusMessage({ type: "success", text: result.message });
-    } catch (error) {
-      console.error("Failed to add meal to plan:", error);
-      setStatusMessage({
-        type: "error",
-        text: error.message || "Failed to add meal",
-      });
-    } finally {
-      setAddingToPlan(false);
-    }
+    // Show date picker instead of immediately adding
+    setShowDatePicker(true);
   };
 
   const handleDeleteRecipe = async () => {
@@ -838,21 +855,23 @@ const MealDetails = () => {
                 {addingToPlan ? (
                   <span className="loading loading-spinner loading-sm mr-2"></span>
                 ) : (
-                  <svg
-                    className="w-5 h-5 mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                    />
-                  </svg>
+                  <>
+                    <svg
+                      className="w-5 h-5 mr-2"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <span>Schedule for Later</span>
+                  </>
                 )}
-                {addingToPlan ? "Adding..." : "Add to Meal Plan"}
               </button>
             </div>
 
@@ -921,6 +940,13 @@ const MealDetails = () => {
               </div>
             </motion.div>
           )}
+
+          <DatePickerModal
+            isOpen={showDatePicker}
+            onClose={() => setShowDatePicker(false)}
+            onSelectDate={handleDateSelected}
+            title="Add to Meal Plan"
+          />
         </div>
       </div>
     </div>
