@@ -18,6 +18,11 @@ const Options = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  const [healthConditions, setHealthConditions] = useState([]);
+  const [diabetesType, setDiabetesType] = useState("");
+  const [bpLevel, setBpLevel] = useState("");
+  const [otherCondition, setOtherCondition] = useState("");
+
   // Form state for account settings
   const [accountForm, setAccountForm] = useState({
     name: "",
@@ -117,12 +122,126 @@ const Options = () => {
 
           setPrimaryGoal(userData.goal || "Maintain Weight");
         }
+
+        if (userData.health_conditions) {
+          setHealthConditions(userData.health_conditions || []);
+
+          // Set specific condition details if they exist
+          const diabetesCondition = userData.health_conditions.find((c) =>
+            c.includes("Diabetes")
+          );
+          if (diabetesCondition) {
+            if (diabetesCondition.includes("Type 1")) {
+              setDiabetesType("type1");
+            } else if (diabetesCondition.includes("Type 2")) {
+              setDiabetesType("type2");
+            } else {
+              setDiabetesType("general");
+            }
+          }
+
+          const bpCondition = userData.health_conditions.find(
+            (c) => c.includes("Blood Pressure") || c.includes("Hypertension")
+          );
+          if (bpCondition) {
+            if (bpCondition.includes("Stage 1")) {
+              setBpLevel("stage1");
+            } else if (bpCondition.includes("Stage 2")) {
+              setBpLevel("stage2");
+            } else {
+              setBpLevel("general");
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("Error loading user data:", err);
       setError("Failed to load your preferences. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConditionToggle = (condition) => {
+    if (healthConditions.includes(condition)) {
+      setHealthConditions(healthConditions.filter((c) => c !== condition));
+
+      // Reset specific condition settings when toggled off
+      if (condition === "Diabetes" || condition.includes("Diabetes")) {
+        setDiabetesType("");
+      } else if (
+        condition === "High Blood Pressure" ||
+        condition.includes("Blood Pressure") ||
+        condition.includes("Hypertension")
+      ) {
+        setBpLevel("");
+      }
+    } else {
+      setHealthConditions([...healthConditions, condition]);
+    }
+  };
+
+  // Handle adding other health conditions
+  const handleAddOtherCondition = () => {
+    if (otherCondition.trim() !== "") {
+      setHealthConditions([...healthConditions, otherCondition.trim()]);
+      setOtherCondition("");
+    }
+  };
+
+  // Remove a health condition
+  const removeHealthCondition = (index) => {
+    const newConditions = [...healthConditions];
+    const removedCondition = newConditions[index];
+
+    // Reset specific condition settings if needed
+    if (removedCondition.includes("Diabetes")) {
+      setDiabetesType("");
+    } else if (
+      removedCondition.includes("Blood Pressure") ||
+      removedCondition.includes("Hypertension")
+    ) {
+      setBpLevel("");
+    }
+
+    newConditions.splice(index, 1);
+    setHealthConditions(newConditions);
+  };
+
+  // Save health conditions
+  const saveHealthConditions = async () => {
+    if (!user) return;
+
+    try {
+      setSaving(true);
+
+      // Format conditions with specific details
+      const formattedConditions = healthConditions.map((condition) => {
+        if (condition === "Diabetes" && diabetesType) {
+          if (diabetesType === "type1") return "Diabetes Type 1";
+          if (diabetesType === "type2") return "Diabetes Type 2";
+          return "Diabetes";
+        } else if (condition === "High Blood Pressure" && bpLevel) {
+          if (bpLevel === "stage1") return "High Blood Pressure Stage 1";
+          if (bpLevel === "stage2") return "High Blood Pressure Stage 2";
+          return "High Blood Pressure";
+        }
+        return condition;
+      });
+
+      await updateDoc(doc(db, "users", user.uid), {
+        health_conditions: formattedConditions,
+        healthSetupCompleted: true,
+        healthCheckDone: true,
+        updatedAt: new Date(),
+      });
+
+      toast.success("Health conditions updated successfully!");
+    } catch (err) {
+      console.error("Error updating health conditions:", err);
+      toast.error("Failed to update health conditions.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -409,6 +528,31 @@ const Options = () => {
               </li>
               <li>
                 <button
+                  onClick={() => setActiveTab("conditions")}
+                  className={`w-full text-left px-4 py-2 rounded-lg flex items-center ${
+                    activeTab === "conditions"
+                      ? "bg-primary text-white"
+                      : "text-neutral-300 hover:bg-neutral-700"
+                  }`}
+                >
+                  <svg
+                    className="w-5 h-5 mr-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                    />
+                  </svg>
+                  Health Conditions
+                </button>
+              </li>
+              <li>
+                <button
                   onClick={() => setActiveTab("health")}
                   className={`w-full text-left px-4 py-2 rounded-lg flex items-center ${
                     activeTab === "health"
@@ -649,6 +793,352 @@ const Options = () => {
                   disabled={saving}
                 >
                   {saving ? "Saving..." : "Save Preferences"}
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {activeTab === "conditions" && (
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+            >
+              <h2 className="text-xl font-bold text-white mb-6">
+                Health Conditions
+              </h2>
+
+              <motion.div variants={itemVariants} className="mb-6">
+                <p className="text-neutral-400 mb-4">
+                  Select any health conditions you have so we can customize your
+                  meal recommendations:
+                </p>
+
+                <div className="space-y-3">
+                  <label className="flex items-center bg-neutral-700 p-3 rounded-lg cursor-pointer hover:bg-neutral-600 transition-colors">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-primary mr-3"
+                      checked={
+                        healthConditions.includes("Diabetes") ||
+                        healthConditions.some((c) => c.includes("Diabetes"))
+                      }
+                      onChange={() => handleConditionToggle("Diabetes")}
+                    />
+                    <span className="text-white">Diabetes</span>
+                  </label>
+
+                  {(healthConditions.includes("Diabetes") ||
+                    healthConditions.some((c) => c.includes("Diabetes"))) && (
+                    <div className="ml-7 mt-2 mb-4 bg-neutral-700/40 p-4 rounded-lg">
+                      <p className="text-sm text-neutral-300 mb-3">
+                        What type of diabetes do you have?
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <label
+                          className={`px-3 py-2 rounded-md cursor-pointer ${
+                            diabetesType === "type1"
+                              ? "bg-primary text-white"
+                              : "bg-neutral-700 text-neutral-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="diabetesType"
+                            value="type1"
+                            checked={diabetesType === "type1"}
+                            onChange={() => setDiabetesType("type1")}
+                            className="hidden"
+                          />
+                          Type 1
+                        </label>
+                        <label
+                          className={`px-3 py-2 rounded-md cursor-pointer ${
+                            diabetesType === "type2"
+                              ? "bg-primary text-white"
+                              : "bg-neutral-700 text-neutral-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="diabetesType"
+                            value="type2"
+                            checked={diabetesType === "type2"}
+                            onChange={() => setDiabetesType("type2")}
+                            className="hidden"
+                          />
+                          Type 2
+                        </label>
+                        <label
+                          className={`px-3 py-2 rounded-md cursor-pointer ${
+                            diabetesType === "general"
+                              ? "bg-primary text-white"
+                              : "bg-neutral-700 text-neutral-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="diabetesType"
+                            value="general"
+                            checked={diabetesType === "general"}
+                            onChange={() => setDiabetesType("general")}
+                            className="hidden"
+                          />
+                          Not sure
+                        </label>
+                      </div>
+
+                      <div className="mt-4 bg-blue-900/20 p-3 rounded-md">
+                        <div className="flex items-start">
+                          <svg
+                            className="w-4 h-4 text-blue-400 mt-1 mr-2 flex-shrink-0"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <p className="text-xs text-blue-200">
+                            We'll provide meal recommendations with balanced
+                            carbs and lower glycemic index foods.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <label className="flex items-center bg-neutral-700 p-3 rounded-lg cursor-pointer hover:bg-neutral-600 transition-colors">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-primary mr-3"
+                      checked={
+                        healthConditions.includes("High Blood Pressure") ||
+                        healthConditions.some(
+                          (c) =>
+                            c.includes("Blood Pressure") ||
+                            c.includes("Hypertension")
+                        )
+                      }
+                      onChange={() =>
+                        handleConditionToggle("High Blood Pressure")
+                      }
+                    />
+                    <span className="text-white">
+                      High Blood Pressure (Hypertension)
+                    </span>
+                  </label>
+
+                  {(healthConditions.includes("High Blood Pressure") ||
+                    healthConditions.some(
+                      (c) =>
+                        c.includes("Blood Pressure") ||
+                        c.includes("Hypertension")
+                    )) && (
+                    <div className="ml-7 mt-2 mb-4 bg-neutral-700/40 p-4 rounded-lg">
+                      <p className="text-sm text-neutral-300 mb-3">
+                        What is your blood pressure level?
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <label
+                          className={`px-3 py-2 rounded-md cursor-pointer ${
+                            bpLevel === "stage1"
+                              ? "bg-primary text-white"
+                              : "bg-neutral-700 text-neutral-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="bpLevel"
+                            value="stage1"
+                            checked={bpLevel === "stage1"}
+                            onChange={() => setBpLevel("stage1")}
+                            className="hidden"
+                          />
+                          Stage 1 (130-139/80-89)
+                        </label>
+                        <label
+                          className={`px-3 py-2 rounded-md cursor-pointer ${
+                            bpLevel === "stage2"
+                              ? "bg-primary text-white"
+                              : "bg-neutral-700 text-neutral-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="bpLevel"
+                            value="stage2"
+                            checked={bpLevel === "stage2"}
+                            onChange={() => setBpLevel("stage2")}
+                            className="hidden"
+                          />
+                          Stage 2 (140+/90+)
+                        </label>
+                        <label
+                          className={`px-3 py-2 rounded-md cursor-pointer ${
+                            bpLevel === "general"
+                              ? "bg-primary text-white"
+                              : "bg-neutral-700 text-neutral-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="bpLevel"
+                            value="general"
+                            checked={bpLevel === "general"}
+                            onChange={() => setBpLevel("general")}
+                            className="hidden"
+                          />
+                          Not sure
+                        </label>
+                      </div>
+
+                      <div className="mt-4 bg-purple-900/20 p-3 rounded-md">
+                        <div className="flex items-start">
+                          <svg
+                            className="w-4 h-4 text-purple-400 mt-1 mr-2 flex-shrink-0"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <p className="text-xs text-purple-200">
+                            We'll prioritize lower sodium options and
+                            heart-healthy meals following the DASH diet
+                            principles.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <label className="flex items-center bg-neutral-700 p-3 rounded-lg cursor-pointer hover:bg-neutral-600 transition-colors">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-primary mr-3"
+                      checked={healthConditions.includes("High Cholesterol")}
+                      onChange={() => handleConditionToggle("High Cholesterol")}
+                    />
+                    <span className="text-white">High Cholesterol</span>
+                  </label>
+
+                  <label className="flex items-center bg-neutral-700 p-3 rounded-lg cursor-pointer hover:bg-neutral-600 transition-colors">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-primary mr-3"
+                      checked={healthConditions.includes("Celiac Disease")}
+                      onChange={() => handleConditionToggle("Celiac Disease")}
+                    />
+                    <span className="text-white">Celiac Disease</span>
+                  </label>
+                </div>
+              </motion.div>
+
+              <motion.div variants={itemVariants} className="mb-6">
+                <label className="block text-sm font-medium text-neutral-300 mb-2">
+                  Add other health conditions
+                </label>
+
+                <div className="flex">
+                  <input
+                    type="text"
+                    placeholder="Enter health condition"
+                    value={otherCondition}
+                    onChange={(e) => setOtherCondition(e.target.value)}
+                    className="input input-bordered w-full bg-neutral-700 text-white"
+                  />
+                  <button
+                    onClick={handleAddOtherCondition}
+                    className="btn btn-primary ml-2"
+                    disabled={otherCondition.trim() === ""}
+                  >
+                    Add
+                  </button>
+                </div>
+              </motion.div>
+
+              {healthConditions.length > 0 && (
+                <motion.div variants={itemVariants} className="mb-8">
+                  <p className="text-sm font-medium text-neutral-300 mb-3">
+                    Selected health conditions:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {healthConditions.map((condition, index) => (
+                      <div
+                        key={index}
+                        className="bg-neutral-700 text-white px-3 py-1 rounded-full flex items-center"
+                      >
+                        {condition}
+                        <button
+                          onClick={() => removeHealthCondition(index)}
+                          className="ml-2 text-neutral-400 hover:text-white"
+                        >
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+
+              <motion.div
+                variants={itemVariants}
+                className="bg-neutral-700/40 p-4 rounded-lg mb-8"
+              >
+                <div className="flex items-start">
+                  <svg
+                    className="w-5 h-5 text-blue-400 mt-0.5 mr-2 flex-shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div className="text-sm text-neutral-300">
+                    <p>
+                      Your health information helps us provide better meal
+                      recommendations tailored to your specific needs.
+                    </p>
+                    <p className="mt-1">
+                      Always consult with healthcare professionals about your
+                      dietary requirements.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div variants={itemVariants} className="mt-10">
+                <button
+                  className={`btn btn-primary ${saving ? "loading" : ""}`}
+                  onClick={saveHealthConditions}
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Save Health Conditions"}
                 </button>
               </motion.div>
             </motion.div>

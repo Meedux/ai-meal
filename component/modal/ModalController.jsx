@@ -1,16 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { AnimatePresence } from 'framer-motion';
 import PreferenceModal from './PreferenceModal';
 import MacroModal from './MacroModal';
+import HealthConditionsModal from './HealthConditionsModal'; // You'll need to create this component
 
 const ModalController = ({ user }) => {
   const [showPreferenceModal, setShowPreferenceModal] = useState(false);
   const [showMacroModal, setShowMacroModal] = useState(false);
+  const [showHealthModal, setShowHealthModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [userHealthData, setUserHealthData] = useState(null);
 
   useEffect(() => {
     if (!user) {
@@ -28,6 +31,34 @@ const ModalController = ({ user }) => {
           setShowPreferenceModal(true);
           setLoading(false);
           return;
+        }
+
+        // Check if health conditions have been set up
+        if (!userData.healthSetupCompleted) {
+          // Check if we can detect potential health concerns from preferences
+          const preferences = userData.preferences || {};
+          const additionalPrefs = preferences.additional || [];
+          
+          const hasDiabetes = additionalPrefs.some(pref => 
+            pref.toLowerCase().includes('diabetes')
+          );
+          
+          const hasBloodPressure = additionalPrefs.some(pref => 
+            pref.toLowerCase().includes('blood pressure') || 
+            pref.toLowerCase().includes('hypertension')
+          );
+          
+          // If we detect health conditions or no health check has been done, show health modal
+          if (hasDiabetes || hasBloodPressure || !userData.healthCheckDone) {
+            setUserHealthData({
+              hasDiabetes,
+              hasBloodPressure,
+              existingConditions: userData.health_conditions || []
+            });
+            setShowHealthModal(true);
+            setLoading(false);
+            return;
+          }
         }
 
         // Check if we need to show macro modal
@@ -51,6 +82,25 @@ const ModalController = ({ user }) => {
 
   const handlePreferenceComplete = () => {
     setShowPreferenceModal(false);
+    setShowHealthModal(true);
+  };
+
+  const handleHealthComplete = async (healthConditions) => {
+    if (user) {
+      try {
+        // Save health conditions to user profile
+        await updateDoc(doc(db, "users", user.uid), {
+          health_conditions: healthConditions,
+          healthSetupCompleted: true,
+          healthCheckDone: true,
+          updatedAt: new Date()
+        });
+      } catch (error) {
+        console.error("Error saving health conditions:", error);
+      }
+    }
+    
+    setShowHealthModal(false);
     setShowMacroModal(true);
   };
 
@@ -66,6 +116,14 @@ const ModalController = ({ user }) => {
         <PreferenceModal 
           user={user} 
           onComplete={handlePreferenceComplete} 
+        />
+      )}
+      
+      {showHealthModal && (
+        <HealthConditionsModal
+          user={user}
+          onComplete={handleHealthComplete}
+          initialData={userHealthData}
         />
       )}
       
